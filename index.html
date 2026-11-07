@@ -91,6 +91,7 @@ function gapHW(y){ return 11 - 3.5*Math.min(1, y/BRIDGE); }
 function inGap(x, y){ return y < BRIDGE && Math.abs(x - gapC(y)) < gapHW(y) - 1; }
 
 function newGame(){
+  online.saved = false; online.msg = null;
   game = {
     s1: Math.random()*6.28, s2: Math.random()*6.28,
     players: [], round: 1, turn: 0,
@@ -588,6 +589,7 @@ function drawPowerBar(){
 function draw(){
   ctx.fillStyle = '#41a6f6'; ctx.fillRect(0,0,W,H);
   if (state === 'menu'){ drawMenu(); return; }
+  if (state === 'board'){ drawBoard(); return; }
 
   // muro
   const topWy = cam + (H - GROUND);
@@ -670,6 +672,83 @@ function draw(){
   if (state === 'over') drawOver();
 }
 
+// ================== CLASSIFICA ONLINE (Supabase) ==================
+// Inserisci qui i dati del progetto Supabase (Project Settings -> API).
+// La chiave "anon public" è fatta apposta per stare nel codice del sito.
+const SUPABASE_URL = '';   // es. 'https://abcdefgh.supabase.co'
+const SUPABASE_KEY = '';   // chiave "anon public"
+const ONLINE = !!(SUPABASE_URL && SUPABASE_KEY);
+const online = { list: null, loading: false, error: null, saving: false, saved: false, msg: null, from: 'menu' };
+
+function sbHeaders(){
+  return { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+}
+async function loadBoard(){
+  if (!ONLINE){ online.error = 'NON ATTIVA'; return; }
+  online.loading = true; online.error = null;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/records?select=name,score&order=score.desc,created_at.asc&limit=10', { headers: sbHeaders() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    online.list = await r.json();
+  } catch (e){ online.error = 'NIENTE CONNESSIONE'; }
+  online.loading = false;
+}
+function cleanName(n){
+  return (n || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]/g, '').trim().slice(0, 10);
+}
+function lastName(){ try { return localStorage.getItem('spacca_nome') || ''; } catch(e){ return ''; } }
+async function saveScores(){
+  if (!ONLINE || online.saving || online.saved) return;
+  // chiedo subito tutti i nomi (dentro il tocco), poi invio
+  const entries = [];
+  game.players.forEach((p, i) => {
+    const sc = Math.round(score(i));
+    if (sc <= 0) return;
+    const def = game.players.length === 1 ? lastName() : '';
+    const n = cleanName(window.prompt('Nome per la classifica (' + p.kid.name + ', ' + meters(sc) + ')', def));
+    if (n) entries.push({ name: n, score: sc });
+  });
+  if (!entries.length) return;
+  if (game.players.length === 1){ try { localStorage.setItem('spacca_nome', entries[0].name); } catch(e){} }
+  online.saving = true; online.msg = 'INVIO...';
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/records', {
+      method: 'POST', headers: Object.assign(sbHeaders(), { Prefer: 'return=minimal' }), body: JSON.stringify(entries)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    online.saved = true; online.msg = null;
+    openBoard('over');
+  } catch (e){ online.msg = 'ERRORE, RIPROVA'; }
+  online.saving = false;
+}
+function openBoard(from){
+  online.from = from; state = 'board'; sfx.tick();
+  loadBoard();
+}
+function drawBoard(){
+  buttons = [];
+  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
+  text('CLASSIFICA', W/2, 16, 10, '#fee761');
+  text('RECORD ONLINE', W/2, 32, 6, '#c0cbdc');
+  if (!ONLINE) text('NON ATTIVA', W/2, 120, 8, '#e43b44');
+  else if (online.loading && !online.list) text('CARICO...', W/2, 120, 8, '#f4f4f4');
+  else if (online.error) text(online.error, W/2, 120, 8, '#e43b44');
+  else if (online.list && !online.list.length) text('ANCORA NESSUNO!', W/2, 120, 8, '#f4f4f4');
+  else if (online.list){
+    const medal = ['#fee761', '#c0cbdc', '#b86f50'];
+    online.list.forEach((r, k) => {
+      const y = 52 + k*20;
+      ctx.fillStyle = 'rgba(26,28,44,0.85)'; ctx.fillRect(8, y - 3, W - 16, 15);
+      const c = medal[k] || '#f4f4f4';
+      text((k+1) + '.', 12, y, 6, c, 'left');
+      text(String(r.name), 30, y, 6, c, 'left');
+      text(meters(r.score), W - 12, y, 8, c, 'right');
+    });
+  }
+  button('INDIETRO', W/2 - 50, H - 34, 100, 22, () => { state = online.from; sfx.tick(); }, '#5a6988');
+}
+
 // ================== MENU ==================
 let buttons = [];
 function button(label, x, y, w, h, onTap, color='#38b764'){
@@ -688,13 +767,13 @@ function drawMenu(){
   ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 84, 18, H);
   ctx.fillStyle = '#9a7b78'; ctx.fillRect(W/2 - 15, 80, W, 8);
   ctx.fillStyle = '#d8343f';
-  for (const [bx, byy] of [[8,100],[W-34,100],[8,140],[W-34,140]]){ ctx.fillRect(bx, byy, 26, 1); for (let k=0;k<=26;k+=3) ctx.fillRect(bx+k, byy, 1, 8); }
+  for (const [bx, byy] of [[8,100],[W-34,100]]){ ctx.fillRect(bx, byy, 26, 1); for (let k=0;k<=26;k+=3) ctx.fillRect(bx+k, byy, 1, 8); }
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 26, W, 54);
   text('PALLONE', W/2, 34, 14, '#fee761');
   text('NELLA', W/2, 50, 8, '#f4f4f4');
   text('SPACCA', W/2, 62, 14, '#e43b44');
   // pallone che rimbalza
-  const by = 130 - Math.abs(Math.sin(t*3))*30;
+  const by = 126 - Math.abs(Math.sin(t*3))*28;
   drawBall(W/2, by, t*8);
 
   text('GIOCATORI', W/2, 160, 8, '#1a1c2c', 'center', false);
@@ -704,10 +783,11 @@ function drawMenu(){
   }
   text('TIRI', W/2, 202, 8, '#1a1c2c', 'center', false);
   [3,5].forEach((r, i) => button(''+r, W/2 - 40 + i*44, 214, 36, 20, () => { menu.rounds = r; sfx.tick(); }, menu.rounds===r ? '#feae34' : '#5a6988'));
-  button('GIOCA!', W/2 - 50, 248, 100, 26, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
-  if (best > 0) text('RECORD SOLO ' + meters(best), W/2, 284, 6, '#fee761', 'center', true);
-  text('Incastra il pallone', W/2, 298, 6, '#f4f4f4', 'center', true);
-  text('più in alto di tutti!', W/2, 308, 6, '#f4f4f4', 'center', true);
+  button('GIOCA!', W/2 - 50, 242, 100, 24, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
+  button('CLASSIFICA', W/2 - 50, 274, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
+  if (online.list && online.list.length) text('TOP: ' + online.list[0].name + ' ' + meters(online.list[0].score), W/2, 300, 6, '#fee761', 'center', true);
+  else if (best > 0) text('RECORD SOLO ' + meters(best), W/2, 300, 6, '#fee761', 'center', true);
+  text('Incastralo più in alto!', W/2, 140, 6, '#f4f4f4', 'center', true);
 }
 
 function drawOver(){
@@ -725,13 +805,17 @@ function drawOver(){
     text('RECORD ' + meters(best), W/2, 108, 6, '#f4f4f4');
   }
   ranking.forEach((r, k) => {
-    const y = 124 + k*20;
+    const y = 124 + k*16;
     text((k+1) + '.', 30, y, 8, '#f4f4f4', 'left');
     ctx.fillStyle = r.p.kid.shirt; ctx.fillRect(50, y, 8, 8);
     text(r.p.kid.name, 62, y, 6, '#f4f4f4', 'left');
     text(meters(r.s), W-24, y, 8, r.p.kid.shirt, 'right');
   });
-  button('RIGIOCA', W/2 - 50, 212, 100, 20, () => { newGame(); });
+  if (ONLINE && ranking.some(r => r.s > 0)){
+    if (online.saved) button('CLASSIFICA', W/2 - 50, 188, 100, 16, () => openBoard('over'), '#3b5dc9');
+    else button(online.msg || 'SALVA RECORD', W/2 - 70, 188, 140, 16, () => { saveScores(); }, '#3b5dc9');
+  }
+  button('RIGIOCA', W/2 - 50, 210, 100, 20, () => { newGame(); });
   button('MENU', W/2 - 50, 236, 100, 18, () => { state = 'menu'; }, '#5a6988');
 }
 
@@ -744,7 +828,7 @@ function toGame(e){
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   const p = toGame(e);
-  if (state === 'menu' || state === 'over'){
+  if (state === 'menu' || state === 'over' || state === 'board'){
     for (const b of buttons) if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h){ b.onTap(); return; }
     return;
   }
@@ -790,12 +874,13 @@ window.addEventListener('keyup', e => { if (e.code === 'Space' && state === 'aim
 let last = performance.now();
 function loop(now){
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (state !== 'menu') update(dt);
+  if (state !== 'menu' && state !== 'board') update(dt);
   draw();
   requestAnimationFrame(loop);
 }
 window.addEventListener('resize', resize);
 resize();
+if (ONLINE) loadBoard();
 requestAnimationFrame(loop);
 </script>
 </body>

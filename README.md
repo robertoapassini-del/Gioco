@@ -25,3 +25,12 @@ dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il 
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages
 e aggiungerlo alla schermata Home. Su PC si gioca con le frecce e la barra spaziatrice.
+
+## Classifica online
+I record vengono salvati su [Supabase](https://supabase.com), che offre un piano gratuito.
+1. Crea un progetto su Supabase.
+2. In **SQL Editor** incolla ed esegui il contenuto di `supabase.sql`.
+3. In **Project Settings → API** copia il *Project URL* e la chiave *anon public*.
+4. Inseriscili in `index.html`, nelle costanti `SUPABASE_URL` e `SUPABASE_KEY`.
+
+Finché le due costanti sono vuote, la classifica risulta "NON ATTIVA" e il gioco funziona normalmente.
