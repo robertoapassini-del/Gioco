@@ -20,7 +20,7 @@ dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il 
 - I **piccioni** volano davanti alla spacca: se li colpisci, il pallone devia. A ogni round ce ne sono di più e vanno più veloci.
 - La barra di potenza corre più veloce a ogni round, accelera verso l'alto e trema un po'.
 - La minimappa a destra mostra i palloni incastrati.
-- Da 1 a 4 giocatori sullo stesso telefono, con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
+- Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
 
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages
