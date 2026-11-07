@@ -10,7 +10,11 @@ dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il 
 - Il pallone si incastra nelle strozzature della spacca (cornicioni e tubi) se ci arriva lento, cioè vicino al punto più alto del tiro.
 - Il posto più alto è proprio sotto lo sbalzo del palazzo di destra. Se tiri troppo forte, il pallone sbatte e ricade.
 - Se il tuo pallone finisce dove ce n'è già un altro, **lo butta giù** e quello perde il punto.
-- Occhio al **vento**: cresce a ogni round. La minimappa a destra mostra i palloni incastrati.
+- Il pallone si incastra solo dal **lato aperto** della strozzatura. Se arrivi dal lato del cornicione, ci sbatti contro e ricadi.
+- Il **vento** soffia a raffiche e cambia anche mentre il pallone è in volo. Cresce a ogni round.
+- I **piccioni** volano davanti alla spacca: se li colpisci, il pallone devia. A ogni round ce ne sono di più e vanno più veloci.
+- La barra di potenza corre più veloce a ogni round, accelera verso l'alto e trema un po'.
+- La minimappa a destra mostra i palloni incastrati.
 - Da 1 a 4 giocatori sullo stesso telefono, con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
 
 ## Avvio
