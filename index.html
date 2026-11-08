@@ -83,8 +83,8 @@ const KIDS = [
 ];
 
 let game = null;     // stato della partita
-let state = 'menu';  // menu | select | aim | flight | result | over | board
-let menu = { players:5, rounds:3 };
+let state = 'menu';  // menu | select | setup | aim | flight | result | over | board
+let menu = { players:5, rounds:3 };  // multiplayer: da 2 a 5
 let best = 0;
 try { best = +localStorage.getItem('spacca_best') || 0; } catch(e){}
 
@@ -620,6 +620,7 @@ function draw(){
   if (state === 'menu'){ drawMenu(); return; }
   if (state === 'board'){ drawBoard(); return; }
   if (state === 'select'){ drawSelect(); return; }
+  if (state === 'setup'){ drawSetup(); return; }
   ctx.save();
   if (shakeT > 0) ctx.translate(Math.round((Math.random()*2 - 1)*shakeA), Math.round((Math.random()*2 - 1)*shakeA));
 
@@ -941,7 +942,7 @@ function drawSelect(){
   const t = performance.now()/1000;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
-  text('SCALATA', W/2, 10, 12, '#fee761');
+  text('SINGLE PLAYER', W/2, 10, 10, '#fee761');
   text('SCEGLI U FIGGHIULEDDU', W/2, 28, 6, '#c0cbdc');
   const slot = W / 5;
   KIDS.forEach((k, i) => {
@@ -979,7 +980,7 @@ function drawClimbOver(){
   buttons = [];
   ctx.fillStyle = 'rgba(26,28,44,0.92)'; ctx.fillRect(10, 50, W-20, 220);
   const k = game.players[0].kid;
-  text('FINE SCALATA', W/2, 60, 8, '#e43b44');
+  text('FINE PARTITA', W/2, 60, 8, '#e43b44');
   ctx.save(); ctx.scale(2, 2); drawKid(W/4, k, false, false, 62); ctx.restore();
   text('ARRIVATO AL', W/2, 132, 6, '#c0cbdc');
   text('LIVELLO ' + game.level, W/2, 142, 14, k.shirt);
@@ -1000,7 +1001,7 @@ function drawClimbOver(){
 const SUPABASE_URL = 'https://gtcntxprxphweshzndbp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_tTRzeBoWq3vTX2CEnxN8Pg_o_rhlKAF'; // chiave pubblica
 const ONLINE = !!(SUPABASE_URL && SUPABASE_KEY);
-const online = { list: null, listMode: null, mode: 'tiri', loading: false, error: null, saving: false, saved: false, msg: null, from: 'menu' };
+const online = { list: null, listMode: null, mode: 'scalata', loading: false, error: null, saving: false, saved: false, msg: null, from: 'menu' };
 
 function sbHeaders(){
   const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
@@ -1064,7 +1065,7 @@ function drawBoard(){
   ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
   text('CLASSIFICA', W/2, 16, 10, '#fee761');
   const tab = (label, m, x) => button(label, x, 30, 70, 14, () => { if (online.mode !== m){ online.mode = m; online.list = null; loadBoard(); sfx.tick(); } }, online.mode === m ? '#3b5dc9' : '#333c57');
-  tab('TIRI', 'tiri', W/2 - 74); tab('SCALATA', 'scalata', W/2 + 4);
+  tab('SINGLE', 'scalata', W/2 - 74); tab('MULTI', 'tiri', W/2 + 4);
   if (!ONLINE) text('NON ATTIVA', W/2, 120, 8, '#e43b44');
   else if (online.loading && !online.list) text('CARICO...', W/2, 120, 8, '#f4f4f4');
   else if (online.error) text(online.error, W/2, 120, 8, '#e43b44');
@@ -1110,19 +1111,38 @@ function drawMenu(){
   const by = 126 - Math.abs(Math.sin(t*3))*28;
   drawBall(W/2, by, t*8);
 
-  text('GIOCATORI', W/2, 160, 8, '#1a1c2c', 'center', false);
-  const bw = 26, gap = 4, start = W/2 - (5*bw + 4*gap)/2;
-  for (let i=1;i<=5;i++){
-    button(''+i, start + (i-1)*(bw+gap), 172, bw, 20, () => { menu.players = i; sfx.tick(); }, menu.players===i ? KIDS[i-1].shirt : '#5a6988');
+  text('Incastralo lassù!', W/2, 140, 6, '#f4f4f4', 'center', true);
+  button('SINGLE PLAYER', W/2 - 66, 158, 132, 26, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
+  text('sali di livello da solo', W/2, 188, 6, '#f4f4f4', 'center', true);
+  button('MULTIPLAYER', W/2 - 66, 204, 132, 26, () => { audio(); state = 'setup'; sfx.tick(); }, '#e43b44');
+  text('sfida i tuoi amici', W/2, 234, 6, '#f4f4f4', 'center', true);
+  button('CLASSIFICA', W/2 - 50, 256, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
+  if (online.list && online.list.length && online.listMode === 'scalata') text('TOP: ' + online.list[0].name + ' LIV ' + online.list[0].score, W/2, 284, 6, '#fee761', 'center', true);
+}
+
+// schermata multiplayer: quanti giocatori e quanti tiri
+function drawSetup(){
+  buttons = [];
+  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
+  text('MULTIPLAYER', W/2, 12, 10, '#e43b44');
+  text('a turno, un solo telefono', W/2, 28, 6, '#c0cbdc', 'center', false);
+  text('GIOCATORI', W/2, 46, 8, '#f4f4f4');
+  const bw = 30, gap = 6, start = W/2 - (4*bw + 3*gap)/2;
+  for (let i=2;i<=5;i++){
+    button(''+i, start + (i-2)*(bw+gap), 58, bw, 20, () => { menu.players = i; sfx.tick(); }, menu.players===i ? KIDS[i-1].shirt : '#5a6988');
   }
-  text('TIRI', W/2, 202, 8, '#1a1c2c', 'center', false);
-  [3,5].forEach((r, i) => button(''+r, W/2 - 40 + i*44, 214, 36, 20, () => { menu.rounds = r; sfx.tick(); }, menu.rounds===r ? '#feae34' : '#5a6988'));
-  button('GIOCA!', W/2 - 78, 242, 74, 24, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
-  button('SCALATA', W/2 + 4, 242, 74, 24, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
-  button('CLASSIFICA', W/2 - 50, 274, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
-  if (online.list && online.list.length && online.listMode === 'tiri') text('TOP: ' + online.list[0].name + ' ' + online.list[0].score + ' INC', W/2, 300, 6, '#fee761', 'center', true);
-  else if (best > 0) text('RECORD SOLO ' + best + ' INC', W/2, 300, 6, '#fee761', 'center', true);
-  text('Incastralo più in alto!', W/2, 140, 6, '#f4f4f4', 'center', true);
+  // chi gioca
+  const n = menu.players, slot = W / n;
+  for (let i = 0; i < n; i++){
+    const cx = slot*i + slot/2;
+    ctx.save(); ctx.scale(2, 2); drawKid(cx/2, KIDS[i], false, false, 72); ctx.restore();
+    text(KIDS[i].name, cx, 148, 6, KIDS[i].shirt, 'center', false);
+  }
+  text('TIRI A TESTA', W/2, 166, 8, '#f4f4f4');
+  [3,5].forEach((r, i) => button(''+r, W/2 - 40 + i*44, 178, 36, 20, () => { menu.rounds = r; sfx.tick(); }, menu.rounds===r ? '#feae34' : '#5a6988'));
+  button('GIOCA!', W/2 - 50, 214, 100, 26, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
+  button('INDIETRO', W/2 - 50, 250, 100, 18, () => { state = 'menu'; sfx.tick(); }, '#5a6988');
 }
 
 function drawOver(){
@@ -1168,7 +1188,7 @@ function toGame(e){
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   const p = toGame(e);
-  if (state === 'menu' || state === 'over' || state === 'board' || state === 'select'){
+  if (state === 'menu' || state === 'over' || state === 'board' || state === 'select' || state === 'setup'){
     for (const b of buttons) if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h){ b.onTap(); return; }
     return;
   }
@@ -1214,7 +1234,7 @@ window.addEventListener('keyup', e => { if (e.code === 'Space' && state === 'aim
 let last = performance.now();
 function loop(now){
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (game && state !== 'menu' && state !== 'board' && state !== 'select') update(dt);
+  if (game && !['menu', 'board', 'select', 'setup'].includes(state)) update(dt);
   draw();
   requestAnimationFrame(loop);
 }

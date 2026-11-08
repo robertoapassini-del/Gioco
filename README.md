@@ -4,6 +4,8 @@ Gioco arcade in pixel art per cellulare. Ogni giocatore ha il suo figghiuleddu e
 dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il pallone più in alto.
 
 ## Come si gioca
+All'avvio scegli **SINGLE PLAYER** (da solo, a livelli) oppure **MULTIPLAYER** (da 2 a 5 amici sullo stesso telefono, a turno).
+
 Si tira da dentro la spacca, dal vialetto che porta alle scale. C'è **un solo punto** dove il pallone si incastra:
 **in alto a sinistra, sotto lo sbalzo**.
 - **Trascina u figghiuleddu** per spostarlo nel vialetto.
@@ -13,9 +15,9 @@ Si tira da dentro la spacca, dal vialetto che porta alle scale. C'è **un solo p
 - Il pallone incastrato **resta lassù**, e il prossimo deve **buttarlo giù**.
 - Punti: **+1 per ogni incastro**, **+1 se butti giù il pallone di un altro**. In caso di pareggio vince chi è andato più vicino all'incastro (il gioco mostra la distanza in cm dopo ogni tiro).
 - Il **vento** soffia a raffiche e cresce a ogni round. I **piccioni** deviano il pallone.
-- Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa.
+- In multiplayer giocano da 2 a 5 figghiuleddi (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa.
 
-## Scalata (giocatore singolo)
+## Single player
 Scegli il tuo figghiuleddu: ogni livello si supera **incastrando il pallone**. Hai 3 palloni, e ogni tiro sbagliato te ne
 costa uno. Ogni 5 livelli superati guadagni un pallone.
 
@@ -42,4 +44,4 @@ e aggiungerlo alla schermata Home. Su PC si gioca con le frecce e la barra spazi
 ## Classifica online
 I record vengono salvati su [Supabase](https://supabase.com), che offre un piano gratuito.
 Il gioco è già collegato al progetto Supabase (costanti `SUPABASE_URL` e `SUPABASE_KEY` in `index.html`).
-La tabella si crea, o si aggiorna, eseguendo `supabase.sql` in **SQL Editor**. Le classifiche sono due: TIRI (incastri in una partita) e SCALATA (livello raggiunto).
+La tabella si crea, o si aggiorna, eseguendo `supabase.sql` in **SQL Editor**. Le classifiche sono due: SINGLE (livello raggiunto) e MULTI (incastri in una partita).
