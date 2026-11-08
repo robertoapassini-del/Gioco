@@ -32,7 +32,7 @@ Poi arrivano i disturbi:
 Ognuno ha le sue caratteristiche, sia in single player sia in multiplayer:
 | Figghiuleddu | Caratteristica |
 |---|---|
-| Uca | normale, ma ogni tanto gira all'impazzata dicendo *"azzamittru, azzamittru, yeah yeah"*: mentre gira la mira va a caso |
+| Uca | normale, ma ogni tanto gira all'impazzata (nel fumetto: *"azzamittru, azzamittru, yeah yeah"*): mentre gira la mira va a caso |
 | Fabio | debole (tira meno forte), ma i piccioni non lo deviano |
 | Tano | il più forte, ma senza capelli non capisce il vento: la freccia del vento gli va a caso |
 | Giammy | il meno preciso: l'angolo del tiro gli sbanda |

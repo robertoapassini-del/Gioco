@@ -820,7 +820,6 @@ function updateUca(dt){
   u.t -= dt;
   if (u.t <= 0){
     u.spin = 1.8; u.t = 4 + Math.random()*4; kidJump = 0.3;
-    speak('Azzamittru, azzamittru, yeah yeah!', 1.2, 1.2);
     beep(330, 0.1, 'square', 660, 0.05); setTimeout(() => beep(440, 0.1, 'square', 880, 0.05), 150);
   }
 }
