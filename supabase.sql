@@ -9,7 +9,7 @@ create table if not exists public.records (
   created_at timestamptz not null default now()
 );
 
--- modalità: 'tiri' (sfida tra amici, score = altezza) o 'scalata' (score = livello raggiunto)
+-- modalità: 'tiri' (sfida tra amici, score = incastri in una partita) o 'scalata' (score = livello raggiunto)
 alter table public.records add column if not exists mode text not null default 'tiri';
 alter table public.records drop constraint if exists records_mode_check;
 alter table public.records add constraint records_mode_check check (mode in ('tiri', 'scalata'));

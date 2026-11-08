@@ -4,30 +4,24 @@ Gioco arcade in pixel art per cellulare. Ogni giocatore ha il suo figghiuleddu e
 dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il pallone più in alto.
 
 ## Come si gioca
-- **Trascina u figghiuleddu** per spostarlo lungo il marciapiede.
-- **Tieni premuto** in un altro punto dello schermo per caricare il tiro: la barra a sinistra indica l'altezza.
-- Mentre tieni premuto, **trascina a destra o a sinistra** per inclinare il tiro (la freccia gialla mostra la direzione).
-- **Lascia** per calciare.
-- Il pallone **rimbalza** su balconi, condizionatori, muri e marciapiede: puoi fare tiri **di sponda** per entrare nella spacca.
-- Dentro la spacca il pallone sbatte tra i due muri. Si incastra solo se arriva lento, sia in verticale sia di lato.
-- Se resta fermo su un balcone, il pallone è perso.
-- Colpisci forte un pallone già incastrato e **lo butti giù**. Se ci arrivi piano, ci rimbalzi contro.
-- Il pallone si incastra nelle strozzature della spacca (cornicioni e tubi) se ci arriva lento, cioè vicino al punto più alto del tiro.
-- Il posto più alto è proprio sotto lo sbalzo del palazzo di destra. Se tiri troppo forte, il pallone sbatte e ricade.
-- Se il tuo pallone finisce dove ce n'è già un altro, **lo butta giù** e quello perde il punto.
-- Il pallone si incastra solo dal **lato aperto** della strozzatura. Se arrivi dal lato del cornicione, ci sbatti contro e ricadi.
-- Il **vento** soffia a raffiche e cambia anche mentre il pallone è in volo. Cresce a ogni round.
-- I **piccioni** volano davanti alla spacca: se li colpisci, il pallone devia. A ogni round ce ne sono di più e vanno più veloci.
-- La barra di potenza corre più veloce a ogni round, accelera verso l'alto e trema un po'.
-- La minimappa a destra mostra i palloni incastrati.
-- Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
+Si tira da dentro la spacca, dal vialetto che porta alle scale. C'è **un solo punto** dove il pallone si incastra:
+**in alto a sinistra, sotto lo sbalzo**.
+- **Trascina u figghiuleddu** per spostarlo nel vialetto.
+- **Tieni premuto** in un altro punto dello schermo per caricare il tiro, e intanto **trascina a destra o a sinistra** per inclinarlo (la freccia gialla mostra la direzione). **Lascia** per calciare.
+- Ogni volta che il pallone tocca un muro della spacca perde forza. Siccome l'incastro è di lato, bisogna tirare storto o di sponda, e dare abbastanza potenza.
+- Se arriva nell'angolo si incastra, anche se arriva forte. Se tocca lo sbalzo da un'altra parte, ricade.
+- Il pallone incastrato **resta lassù**, e il prossimo deve **buttarlo giù**.
+- Punti: **+1 per ogni incastro**, **+1 se butti giù il pallone di un altro**. In caso di pareggio vince chi è andato più vicino all'incastro (il gioco mostra la distanza in cm dopo ogni tiro).
+- Il **vento** soffia a raffiche e cresce a ogni round. I **piccioni** deviano il pallone.
+- Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa.
 
 ## Scalata (giocatore singolo)
-Scegli il tuo figghiuleddu e sali di livello. Ogni livello ha un obiettivo di altezza (la linea gialla), e ogni 5 livelli
-c'è un livello speciale: devi stare in una fascia precisa, e se ci riesci guadagni un pallone. Hai 3 palloni: ogni
-tiro che non raggiunge l'obiettivo te ne costa uno.
+Scegli il tuo figghiuleddu: ogni livello si supera **incastrando il pallone**. Hai 3 palloni, e ogni tiro sbagliato te ne
+costa uno. Ogni 5 livelli superati guadagni un pallone.
 
-Livello dopo livello aumentano il vento, la velocità della barra, i piccioni, e la spacca si stringe. Poi arrivano i disturbi:
+Livello dopo livello aumentano il vento e la velocità della barra, arrivano i piccioni, la spacca si stringe e la zona
+dell'incastro diventa più piccola. Dal livello 3 la posizione da cui tiri la decide il gioco, sempre più lontano dall'incastro.
+Poi arrivano i disturbi:
 - **la signora** (dal livello 4) si affaccia e urla *"Ouuuu! A finemu cu stu palluni?!"*: u figghiuleddu si spaventa, la barra impazzisce e la mira si sposta;
 - **la macchina col basso** (dal livello 6), fuori dallo schermo: a ogni colpo di basso u figghiuleddu trema e la mira balla;
 - **il cane** (dal livello 8): prima ringhia, poi abbaia, e se in quel momento stai caricando ti spaventi e il tiro parte da solo!
@@ -48,4 +42,4 @@ e aggiungerlo alla schermata Home. Su PC si gioca con le frecce e la barra spazi
 ## Classifica online
 I record vengono salvati su [Supabase](https://supabase.com), che offre un piano gratuito.
 Il gioco è già collegato al progetto Supabase (costanti `SUPABASE_URL` e `SUPABASE_KEY` in `index.html`).
-La tabella si crea, o si aggiorna, eseguendo `supabase.sql` in **SQL Editor**. Le classifiche sono due: TIRI (altezza) e SCALATA (livello).
+La tabella si crea, o si aggiorna, eseguendo `supabase.sql` in **SQL Editor**. Le classifiche sono due: TIRI (incastri in una partita) e SCALATA (livello raggiunto).

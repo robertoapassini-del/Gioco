@@ -27,15 +27,11 @@ const H = 320;           // risoluzione logica verticale (pixel art)
 let W = 180;
 const GROUND = 40;       // altezza in pixel della strada sotto lo schermo
 const WALL_TOP = 2100;   // altezza del muro (unità; 100 = 1 metro)
-const MAX_H = 2100;      // altezza massima raggiungibile col tiro
+const MAX_H = 2400;      // altezza massima del tiro (i rimbalzi poi tolgono forza)
 const BRIDGE = 1700;     // sbalzo del palazzo di destra che chiude la spacca
 const BRIDGE_T = 70;
 const RIGHT_TOP = 1960;  // tetto del palazzo di destra
 const G = 800;           // gravità
-const CATCH_VY = 250;    // sotto questa velocità verticale il pallone si incastra
-const CATCH_DY = 5;      // tolleranza in altezza sulla strozzatura
-const CATCH_DX = 2.6;    // tolleranza laterale: devi stare sul lato aperto
-const CATCH_VX = 55;     // se va troppo veloce di lato non si incastra
 const BALL_R = 3.5;
 const FONT = '"Press Start 2P", monospace';
 
@@ -92,57 +88,47 @@ let menu = { players:5, rounds:3 };
 let best = 0;
 try { best = +localStorage.getItem('spacca_best') || 0; } catch(e){}
 
-// la spacca tra i due palazzi: centro e mezza larghezza in funzione dell'altezza
-function gapC(y){ return W/2 + 3*Math.sin(y*0.003 + game.s1) + 1.5*Math.sin(y*0.011 + game.s2); }
-function gapHW(y){ return (11 - 3.5*Math.min(1, y/BRIDGE)) * (game && game.gapScale || 1); }
-function inGap(x, y){ return y < BRIDGE && Math.abs(x - gapC(y)) < gapHW(y) - 1; }
+// la spacca tra i due palazzi: muri dritti e lisci, chiusa in alto dallo sbalzo
+function gapC(y){ return W/2; }
+function gapHW(y){ return 16 * (game && game.gapScale || 1); }
+// l'unico punto dove il pallone si incastra: in alto a sinistra, sotto lo sbalzo
+function nicheX(){ return gapC(BRIDGE) - gapHW(BRIDGE) + BALL_R; }
+const NICHE_Y = BRIDGE - BALL_R;
+function nicheTol(){ return isClimb() ? Math.max(3.5, 6.5 - (game.level - 1)*0.2) : 6; }
+// dove può stare il figghiuleddu nel vialetto (dentro la spacca)
+function kidMin(){ return gapC(0) - gapHW(0) + 5; }
+function kidMax(){ return gapC(0) + gapHW(0) - 6; }
 
 function makeGame(mode){
   online.saved = false; online.msg = null;
   dist = {}; shakeT = 0; kidJump = 0;
   game = {
-    mode, s1: Math.random()*6.28, s2: Math.random()*6.28,
-    players: [], round: 1, turn: 0, gapScale: 1, spacing: [85, 65], chargeBoost: 0,
-    pockets: [], falling: [], particles: [], birds: [], popups: [], solids: [], t: 0,
+    mode, players: [], round: 1, turn: 0, gapScale: 1, chargeBoost: 0, lockX: null,
+    niche: { owner: -1 }, points: [], closest: [],
+    falling: [], particles: [], birds: [], popups: [], solids: [], t: 0,
   };
-}
-// strozzature nella spacca (cornicioni/tubi) dove il pallone si incastra
-function genPockets(){
-  game.pockets = [];
-  let y = 80;
-  while (y < BRIDGE - 60){
-    game.pockets.push({ x: 0, y, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: Math.random()<0.35 });
-    y += game.spacing[0] + Math.random()*game.spacing[1];
-  }
-  // il posto d'oro: proprio sotto lo sbalzo
-  game.pockets.push({ x: 0, y: BRIDGE - 6, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: false, top: true });
-  buildWall();
 }
 function newGame(){
   makeGame('party');
-  const spots = [W*0.18, W*0.82, W*0.32, W*0.68, W*0.5];
-  for (let i=0;i<menu.players;i++) game.players.push({ kid:KIDS[i], x: spots[i] });
-  genPockets();
+  // chi aspetta sta sul marciapiede, ai lati della spacca
+  const homes = [W*0.3, W*0.72, W*0.21, W*0.84, W*0.95];
+  for (let i=0;i<menu.players;i++){
+    game.players.push({ kid:KIDS[i], home: homes[i], x: homes[i], gx: gapC(0) + 4 });
+    game.points.push(0); game.closest.push(Infinity);
+  }
+  buildWall();
   startTurn();
 }
 
-function score(i){
-  let m = 0;
-  for (const p of game.pockets) if (p.owner === i) m = Math.max(m, p.y);
-  return m;
-}
+function score(i){ return game.points[i] || 0; }
+const cm = d => Math.max(1, Math.round(d)) + ' cm';
 const meters = y => (y/100).toFixed(1) + 'm';
 
 // ================== PALAZZI E SPACCA (pre-renderizzati) ==================
 let wallCv = null;
 const WALL_IMG_H = WALL_TOP + 60;
 function rnd(seed){ let s = seed; return () => (s = (s*16807) % 2147483647) / 2147483647; }
-function setPocketX(p){
-  const c = gapC(p.y), hw = gapHW(p.y);
-  p.x = p.side < 0 ? c + hw - BALL_R - 0.5 : c - hw + BALL_R + 0.5;
-}
 function buildWall(){
-  game.pockets.forEach(setPocketX);
   game.solids = [];
   wallCv = document.createElement('canvas');
   wallCv.width = W; wallCv.height = WALL_IMG_H;
@@ -218,17 +204,10 @@ function buildWall(){
     rect('#1f1f28', gr + 6, row(80), 2, 80);
     for (let i = 0; i < 70; i++) rect(R() < 0.5 ? '#3e7a3e' : '#5a9a48', gr + 8 + R()*(W - gr - 10), row(10 + R()*70), 4, 3);
   }
-  // strozzature dentro la spacca (cornicioni e tubi) dove si incastra il pallone
-  for (const p of game.pockets){
-    const c = gapC(p.y), hw = gapHW(p.y), r = row(p.y);
-    const len = Math.round(hw*2 - 2*BALL_R - 1);
-    const x0 = p.side < 0 ? Math.round(c - hw) : Math.round(c + hw - len);
-    if (p.pipe){
-      rect('#8b9bb4', x0, r - 3, len, 6); rect('#c0cbdc', x0, r - 3, len, 1); rect('#5a6988', x0, r + 2, len, 1);
-    } else {
-      rect('#a8898a', x0, r - 4, len, 8); rect('#c4a6a4', x0, r - 4, len, 1); rect('#4a3638', x0, r + 4, len, 2);
-    }
-  }
+  // l'incastro: l'angolo in alto a sinistra, sotto lo sbalzo
+  { const x0 = Math.round(gapC(BRIDGE) - gapHW(BRIDGE)), r = row(BRIDGE);
+    rect('#1c0f0a', x0 - 3, r, 3, 9); rect('#1c0f0a', x0, r, 5, 2);
+    rect('#4a3638', x0 - 3, r + 9, 3, 1); }
   // sbalzo del palazzo di destra che chiude la spacca
   { const c = gapC(BRIDGE), hw = gapHW(BRIDGE), x0 = Math.round(c - hw - 6);
     rect('#9a7b78', x0, row(BRIDGE + BRIDGE_T), W - x0, BRIDGE_T);
@@ -270,7 +249,8 @@ function cur(){ return game.players[game.turn]; }
 function startTurn(){
   state = 'aim';
   const p = cur();
-  ball = { x: p.x + 5, y: BALL_R, vx: 0, vy: 0, spin: 0, bounces: 0, ground: 0, stillT: 0, flyT: 0, inGap: false };
+  p.x = game.lockX !== null ? game.lockX : Math.max(kidMin(), Math.min(kidMax(), p.gx));
+  ball = { x: ballStartX(), y: BALL_R, vx: 0, vy: 0, spin: 0, bounces: 0, ground: 0, stillT: 0, flyT: 0, minD: Infinity, knocked: -1 };
   aimA = 0;
   wind = (Math.random()*2 - 1) * (10 + game.round*6);
   gustAmp = 6 + game.round*4; gustF = 1.2 + Math.random()*1.5; gustPh = Math.random()*6.28;
@@ -281,13 +261,18 @@ function startTurn(){
   spawnBirds();
 }
 
+function ballStartX(){
+  const c = gapC(0), hw = gapHW(0);
+  return Math.max(c - hw + BALL_R, Math.min(c + hw - BALL_R, cur().x + 4));
+}
 function kick(){
   const p = cur();
+  p.gx = p.x;
   const pw = Math.max(0.03, power);
   const h = pw * MAX_H * (1 + (Math.random()-0.5)*(perk('TANO') ? 0.1 : 0.03));
   ball.vy = Math.sqrt(2*G*h);
   ball.vx = ball.vy * Math.tan(aimA) + (Math.random()-0.5)*6;
-  ball.x = p.x + 5; ball.y = BALL_R + 4;
+  ball.x = ballStartX(); ball.y = BALL_R + 4;
   kidAnim = 0.3;
   state = 'flight';
   sfx.kick();
@@ -295,11 +280,14 @@ function kick(){
 }
 
 function endTurn(res){
-  lastResult = res; state = 'result'; resultT = 1.8;
+  lastResult = res; state = 'result'; resultT = 1.9;
+  if (!res.ok && !isClimb()) game.closest[game.turn] = Math.min(game.closest[game.turn], res.d);
 }
+function missRes(){ return { ok: false, d: ball.minD, knocked: ball.knocked }; }
 
 function nextTurn(){
   if (isClimb()){ climbNext(); return; }
+  cur().x = cur().home;
   game.turn++;
   if (game.turn >= game.players.length){ game.turn = 0; game.round++; }
   if (game.round > menu.rounds){ gameOver(); return; }
@@ -343,68 +331,33 @@ function update(dt){
       ball.vy -= G * h;
       ball.x += ball.vx * h; ball.y += ball.vy * h;
       ball.spin += ball.vx * h * 0.3 + h*8;
-      if (ball.x < BALL_R){ ball.x = BALL_R; ball.vx = Math.abs(ball.vx)*0.6; bounceFx(); }
-      if (ball.x > W-BALL_R){ ball.x = W-BALL_R; ball.vx = -Math.abs(ball.vx)*0.6; bounceFx(); }
-      // balconi e condizionatori
-      for (const o of game.solids) collideRect(o);
-      // pareti della spacca: una volta dentro, il pallone rimbalza tra i due muri
-      if (ball.y > 25 && ball.y < BRIDGE){
-        const c = gapC(ball.y), hw = gapHW(ball.y), lo = c - hw + BALL_R, hi = c + hw - BALL_R;
-        if (ball.inGap){
-          if (ball.x < lo){ ball.x = lo; if (ball.vx < -40) bounceFx(); ball.vx = Math.abs(ball.vx)*0.92; }
-          else if (ball.x > hi){ ball.x = hi; if (ball.vx > 40) bounceFx(); ball.vx = -Math.abs(ball.vx)*0.92; }
-        } else if (ball.x > lo && ball.x < hi) ball.inGap = true;
-      } else if (ball.y <= 25) ball.inGap = false;
-      // palloni già incastrati: ci rimbalzi, e se vai forte li butti giù
-      for (const p of game.pockets){
-        if (p.owner < 0) continue;
-        const dx = ball.x - p.x, dy = ball.y - p.y, d2 = dx*dx + dy*dy;
-        if (d2 < 4*BALL_R*BALL_R && d2 > 0.01){
-          const d = Math.sqrt(d2), nx = dx/d, ny = dy/d, sp = Math.hypot(ball.vx, ball.vy);
-          if (sp > 420){
-            game.falling.push({ x:p.x, y:p.y, vx: -nx*120, vy: 80, spin:0, owner:p.owner });
-            popup(p.owner === game.turn ? 'OPS!' : 'COLPITO!', p.x, p.y + 10, game.players[p.owner].kid.shirt);
-            p.owner = -1; sfx.knock();
-            ball.vx *= 0.6; ball.vy *= 0.6;
-          } else {
-            ball.x = p.x + nx*2*BALL_R; ball.y = p.y + ny*2*BALL_R;
-            const vn = ball.vx*nx + ball.vy*ny;
-            if (vn < 0){ ball.vx -= 1.6*vn*nx; ball.vy -= 1.6*vn*ny; bounceFx(); }
-          }
-        }
+      // muri della spacca: ogni rimbalzo toglie forza
+      const c = gapC(ball.y), hw = gapHW(ball.y), lo = c - hw + BALL_R, hi = c + hw - BALL_R;
+      if (ball.x < lo){ ball.x = lo; wallBounce(1); }
+      else if (ball.x > hi){ ball.x = hi; wallBounce(-1); }
+      // c'è un pallone incastrato lassù? se lo prendi lo butti giù
+      const n = game.niche;
+      if (n.owner >= 0){
+        const dx = ball.x - nicheX(), dy = ball.y - NICHE_Y;
+        if (dx*dx + dy*dy < 4*BALL_R*BALL_R) knockNiche();
       }
-      if (ball.y > WALL_TOP + 20 && ball.vy > 0){ ball.vy *= 0.3; } // tetto
-      // dentro la spacca: lo sbalzo in alto fa rimbalzare giù
-      const dentro = inGap(ball.x, Math.min(ball.y, BRIDGE - 1));
-      if (dentro && ball.y > BRIDGE - BALL_R && ball.y < BRIDGE + 10 && ball.vy > 0){
-        ball.y = BRIDGE - BALL_R; ball.vy = -ball.vy * 0.25; sfx.bounce();
+      // lo sbalzo: nell'angolo a sinistra si incastra (anche se arriva forte), altrove rimbalza giù
+      if (ball.y >= BRIDGE - BALL_R && ball.vy > 0){
+        if (n.owner < 0 && ball.x <= lo + nicheTol()){ wedge(); break; }
+        ball.y = BRIDGE - BALL_R; ball.vy = -ball.vy*0.3; ball.vx *= 0.7; sfx.bounce();
         game.particles.push({ x: ball.x, y: BRIDGE, vx: 0, vy: -20, t: 0.5, c: '#9a7b78' });
       }
-      // incastro nelle strozzature
-      if (dentro && Math.abs(ball.vy) < CATCH_VY){
-        for (const p of game.pockets){
-          if (Math.abs(ball.y - p.y) < CATCH_DY){
-            if (Math.abs(ball.x - p.x) < CATCH_DX && Math.abs(ball.vx) < (perk('FABIO') ? 85 : CATCH_VX)){ lodge(p); break; }
-            // lato sbagliato: sbatte sul cornicione e ricade
-            const c = gapC(p.y);
-            if (Math.sign(ball.x - c) !== Math.sign(p.x - c) && ball.vy > 0 && !ball.hitLedge){
-              ball.hitLedge = true; ball.vy = -ball.vy*0.3; ball.vx += (p.x - ball.x)*2; sfx.bounce(); break;
-            }
-          }
-        }
-      }
+      ball.minD = Math.min(ball.minD, Math.hypot(ball.x - nicheX(), NICHE_Y - ball.y));
       if (state==='flight' && ball.y <= BALL_R && ball.vy < 0){
         ball.y = BALL_R;
         if (ball.vy < -220 && ball.ground < 2){ // rimbalzo sul marciapiede
           ball.ground++; ball.vy = -ball.vy*0.42; ball.vx *= 0.7; sfx.bounce();
           popup('BOING', ball.x, 14, '#f4f4f4');
-        } else { sfx.miss(); endTurn({ ok:false }); }
+        } else { sfx.miss(); endTurn(missRes()); }
       }
       // fermo su un balcone?
       if (state==='flight'){
-        if (Math.hypot(ball.vx, ball.vy) < 30 && ball.y > 20) ball.stillT += h; else ball.stillT = 0;
-        if (ball.stillT > 0.7){ sfx.miss(); endTurn({ ok:false, balcony:true }); }
-        else if (ball.flyT > 12){ sfx.miss(); endTurn({ ok:false }); }
+        if (ball.flyT > 12){ sfx.miss(); endTurn(missRes()); }
       }
     }
     camTarget = Math.max(0, Math.min(WALL_TOP - H*0.5, ball.y - H*0.45));
@@ -490,19 +443,31 @@ function hitBirds(){
   }
 }
 
-function lodge(p){
-  const me = game.turn;
-  let knocked = null;
-  if (p.owner >= 0){
-    knocked = p.owner;
-    game.falling.push({ x:p.x, y:p.y, vx:(Math.random()-0.5)*80, vy:120, spin:0, owner:p.owner });
-    sfx.knock();
-  }
-  p.owner = me;
-  ball.vx = ball.vy = 0; ball.x = p.x; ball.y = p.y;
-  for (let i=0;i<14;i++) game.particles.push({ x:p.x, y:p.y, vx:(Math.random()-0.5)*120, vy:(Math.random()-0.2)*120, t:0.6, c: i%2 ? '#efc08a' : cur().kid.shirt });
-  sfx.stuck();
-  endTurn({ ok:true, h:p.y, knocked, bank: ball.bounces });
+function wallBounce(dir){
+  const sp = Math.abs(ball.vx);
+  const ex = perk('FABIO') ? 0.62 : 0.5, ey = perk('FABIO') ? 0.985 : 0.97;
+  ball.vx = dir * sp * ex;
+  if (sp > 25){ ball.vy *= ey; bounceFx(); }
+}
+function knockNiche(){
+  const n = game.niche, prev = n.owner;
+  game.falling.push({ x: nicheX(), y: NICHE_Y, vx: 30 + Math.random()*30, vy: 40, spin: 0, owner: prev });
+  n.owner = -1; sfx.knock(); shake(0.2, 1.5);
+  ball.vx *= 0.6; ball.vy *= 0.6;
+  ball.knocked = prev;
+  if (!isClimb() && prev !== game.turn){
+    game.points[game.turn]++;
+    popup('GIU! +1', nicheX() + 14, NICHE_Y - 6, cur().kid.shirt);
+  } else popup(prev === game.turn ? 'OPS!' : 'GIU!', nicheX() + 14, NICHE_Y - 6, '#f4f4f4');
+}
+function wedge(){
+  const n = game.niche;
+  n.owner = game.turn;
+  ball.x = nicheX(); ball.y = NICHE_Y; ball.vx = ball.vy = 0;
+  if (!isClimb()) game.points[game.turn]++;
+  for (let i=0;i<16;i++) game.particles.push({ x:ball.x, y:ball.y, vx:(Math.random()-0.2)*120, vy:-Math.random()*120, t:0.7, c: i%2 ? '#efc08a' : cur().kid.shirt });
+  sfx.stuck(); shake(0.25, 2);
+  endTurn({ ok: true, knocked: ball.knocked, bank: ball.bounces });
 }
 
 // ================== DISEGNO ==================
@@ -604,10 +569,10 @@ function drawMinimap(){
   ctx.fillStyle = '#7fb2e0'; ctx.fillRect(mx+5, my, 5, Math.round(yy(RIGHT_TOP)) - my);
   ctx.fillStyle = '#2a2130'; ctx.fillRect(Math.round(xx(W/2))-1, Math.round(yy(BRIDGE)), 2, Math.round(BRIDGE/WALL_TOP*mh));
   ctx.fillStyle = '#b0908c'; ctx.fillRect(Math.round(xx(W/2))-1, Math.round(yy(BRIDGE))-1, 6, 1);
-  for (const p of game.pockets){
-    ctx.fillStyle = p.owner >= 0 ? game.players[p.owner].kid.shirt : '#1c0f0a';
-    ctx.fillRect(Math.round(xx(p.x))-1, Math.round(yy(p.y))-1, p.owner>=0?3:2, 2);
-  }
+  // l'incastro (lampeggia se è libero)
+  const nx = Math.round(xx(W/2)) - 2, ny = Math.round(yy(NICHE_Y));
+  if (game.niche.owner >= 0){ ctx.fillStyle = game.players[game.niche.owner].kid.shirt; ctx.fillRect(nx, ny, 3, 3); }
+  else if (Math.sin(performance.now()/200) > 0){ ctx.fillStyle = '#fee761'; ctx.fillRect(nx, ny, 2, 2); }
   // giocatore e vista attuale
   ctx.fillStyle = cur().kid.shirt; ctx.fillRect(Math.round(xx(cur().x))-1, my+mh-2, 3, 3);
   ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 1;
@@ -624,7 +589,7 @@ function drawHUD(){
     if (i === game.turn && state !== 'over'){ ctx.fillStyle = p.kid.shirt; ctx.fillRect(x, 16, bw, 2); }
     // nome sopra, altezza sotto
     text(p.kid.name, x + bw/2, 2, 6, p.kid.shirt);
-    text(meters(score(i)), x + bw/2, 10, 6, '#f4f4f4');
+    text(score(i) + (score(i) === 1 ? ' PT' : ' PT'), x + bw/2, 10, 6, '#f4f4f4');
   });
   text('ROUND ' + Math.min(game.round, menu.rounds) + '/' + menu.rounds, 4, 22, 6, '#f4f4f4', 'left');
   }
@@ -664,11 +629,8 @@ function draw(){
   ctx.drawImage(wallCv, 0, Math.round(srcY), W, H, 0, 0, W, H);
   drawStreet();
 
-  if (isClimb()) drawTargetLine();
   // palloni incastrati
-  for (const p of game.pockets) if (p.owner >= 0 && !(state==='result' && lastResult.ok && lastResult.h===p.y && resultT>1.5)){
-    drawBall(p.x, sy(p.y), 0, p.owner);
-  }
+  if (game.niche.owner >= 0) drawBall(nicheX(), sy(NICHE_Y), 0, game.niche.owner);
   // linea di mira
   if (state === 'aim'){
     const x0 = cur().x + 5, y0 = sy(BALL_R + 2), dx = Math.sin(aimA), dy = Math.cos(aimA);
@@ -686,7 +648,6 @@ function draw(){
   // pallone
   for (const f of game.falling) drawBall(f.x, sy(f.y), f.spin, f.owner);
   if (state === 'aim' || state === 'flight' || (state === 'result' && !lastResult.ok)) drawBall(ball.x, sy(ball.y), ball.spin);
-  if (state === 'result' && lastResult.ok && resultT > 1.5) drawBall(ball.x, sy(ball.y), ball.spin, game.turn);
   // piccioni
   for (const b of game.birds){
     const X = Math.round(b.x), Y = Math.round(sy(b.y));
@@ -712,32 +673,24 @@ function draw(){
     const b = Math.sin(performance.now()/250) > 0;
     if (b) text('TIENI PREMUTO', W/2, H-GROUND+12, 6, '#fee761');
     text('e trascina: angolo', W/2, H-GROUND+21, 6, '#c0cbdc', 'center');
-    text('muovi u figghiuleddu', W/2, H-GROUND+30, 6, '#c0cbdc', 'center');
+    text(game.lockX !== null ? 'posizione fissa!' : 'muovi u figghiuleddu', W/2, H-GROUND+30, 6, game.lockX !== null ? '#feae34' : '#c0cbdc', 'center');
   }
   if (state === 'result'){
     const r = lastResult;
     if (r.ok){
-      text('INCASTRATO!', W/2, 100, 10, '#fee761');
-      text(meters(r.h), W/2, 116, 16, cur().kid.shirt);
-      if (isClimb()){
-        const cr = climbResult(r);
-        if (cr === 'goal') text('LIVELLO SUPERATO!', W/2, 176, 8, '#38b764');
-        else { text(cr === 'high' ? 'TROPPO ALTO!' : 'TROPPO BASSO!', W/2, 176, 8, '#e43b44'); text('-1 PALLONE', W/2, 188, 6, '#f4f4f4'); }
-      }
-      if (r.bank > 0) text(r.bank > 2 ? 'SUPER SPONDA x' + r.bank + '!' : 'DI SPONDA!', W/2, 160, 8, '#73eff7');
-      if (r.knocked !== null && r.knocked !== undefined){
-        text(r.knocked === game.turn ? 'TI SEI BUTTATO GIU!' : 'HAI BUTTATO GIU', W/2, 140, 6, '#f4f4f4');
-        if (r.knocked !== game.turn) text(game.players[r.knocked].kid.name + '!', W/2, 150, 8, game.players[r.knocked].kid.shirt);
-      }
+      text('INCASTRATO!', W/2, 70, 10, '#fee761');
+      if (!isClimb()) text('+1', W/2, 86, 16, cur().kid.shirt);
+      if (r.bank > 0) text(r.bank > 2 ? 'SUPER SPONDA x' + r.bank + '!' : 'DI SPONDA!', W/2, 108, 8, '#73eff7');
+      if (isClimb()) text('LIVELLO SUPERATO!', W/2, 122, 8, '#38b764');
     } else {
-      if (r.balcony){
-        text('SUL BALCONE!', W/2, 110, 10, '#e43b44');
-        text('addio pallone...', W/2, 126, 6, '#f4f4f4');
-      } else {
-        text('NIENTE!', W/2, 110, 12, '#e43b44');
-        text('ritenta', W/2, 128, 6, '#f4f4f4');
-      }
-      if (isClimb()) text('-1 PALLONE', W/2, 142, 8, '#f4f4f4');
+      text('NIENTE!', W/2, 100, 12, '#e43b44');
+      if (r.d < 2000) text('a ' + cm(r.d) + ' dall\'incastro', W/2, 118, 6, '#f4f4f4');
+      if (isClimb()) text('-1 PALLONE', W/2, 132, 8, '#f4f4f4');
+    }
+    if (r.knocked >= 0 && !isClimb()){
+      const k = game.players[r.knocked].kid;
+      text(r.knocked === game.turn ? 'TI SEI BUTTATO GIU!' : 'HAI BUTTATO GIU', W/2, 150, 6, '#f4f4f4');
+      if (r.knocked !== game.turn) text(k.name + '!', W/2, 160, 8, k.shirt);
     }
   }
   if (banner){
@@ -769,52 +722,42 @@ function maxAngle(){ return perk('FABIO') ? 0.62 : MAX_ANGLE; }
 
 function newClimb(){
   makeGame('climb');
-  game.players.push({ kid: KIDS[climbSel], x: W*0.3 });
+  game.players.push({ kid: KIDS[climbSel], home: gapC(0) + 4, x: gapC(0) + 4, gx: gapC(0) + 4 });
+  game.points.push(0); game.closest.push(Infinity);
   game.level = 1;
   game.lives = KIDS[climbSel].name === 'UCA' ? 4 : 3;
   setupLevel();
   startTurn();
 }
-function levelInfo(L){
-  const special = L % 5 === 0;
-  return { special, target: Math.min(1600, 250 + (L-1)*140), band: special ? 220 : 0 };
-}
 function setupLevel(){
-  const L = game.level, info = levelInfo(L);
-  game.target = info.target; game.special = info.special; game.band = info.band;
-  game.gapScale = Math.max(0.78, 1 - (L-1)*0.02);
-  game.spacing = [70 + Math.min(60, L*5), 50];
-  genPockets();
-  // nei livelli speciali deve esserci almeno una strozzatura nella fascia giusta
-  if (game.special && !game.pockets.some(p => p.y >= game.target && p.y <= game.target + game.band)){
-    game.pockets.push({ x: 0, y: game.target + game.band/2, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: true });
-    buildWall();
+  const L = game.level;
+  game.gapScale = Math.max(0.8, 1 - (L-1)*0.015);
+  game.niche.owner = -1;
+  game.falling = [];
+  // dal livello 3 la posizione nel vialetto la decide il gioco: sempre più lontano dall'incastro
+  game.lockX = null;
+  if (L >= 3){
+    const lo = kidMin(), hi = kidMax(), far = Math.min(1, 0.35 + (L - 3)*0.08);
+    game.lockX = lo + (hi - lo) * (far*0.5 + Math.random()*far*0.5);
   }
+  buildWall();
 }
 function climbTurnSetup(){
   const L = game.level;
   wind = (Math.random()*2 - 1) * Math.min(50, (L-1)*5);
   gustAmp = Math.max(0, Math.min(25, (L-3)*3));
   if (perk('PASO')){ wind *= 0.5; gustAmp *= 0.5; }
-  game.pockets.forEach(p => p.owner = -1);
   setupDisturbs(L);
-  let sub = game.special ? 'TRA ' + meters(game.target) + ' E ' + meters(game.target + game.band) : 'SOPRA ' + meters(game.target);
+  let sub = game.lockX !== null ? 'TIRI DA QUI!' : 'INCASTRALO!';
   if (L === INTRO.signora) sub = 'OCCHIO ALLA SIGNORA!';
   if (L === INTRO.car) sub = 'ARRIVA LA MACCHINA!';
   if (L === INTRO.dog) sub = 'ATTENTI AL CANE!';
   banner = { text: 'LIVELLO ' + L, sub, t: L === INTRO.signora || L === INTRO.car || L === INTRO.dog ? 2.4 : 1.8, color: game.players[0].kid.shirt, kid: game.players[0].kid };
 }
-function climbResult(r){
-  if (!r.ok) return 'miss';
-  if (r.h < game.target - 1) return 'low';
-  if (game.special && r.h > game.target + game.band) return 'high';
-  return 'goal';
-}
 function climbNext(){
-  const res = climbResult(lastResult);
-  if (res === 'goal'){
-    if (game.special) game.lives++;
+  if (lastResult.ok){
     game.level++;
+    if ((game.level - 1) % 5 === 0){ game.lives++; popup('+1 PALLONE', W/2, 20, '#38b764'); }
     setupLevel();
   } else {
     game.lives--;
@@ -824,6 +767,7 @@ function climbNext(){
 }
 function climbOver(){
   state = 'over'; camTarget = 0; dist = {};
+  try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch(e){}
   const k = game.players[0].kid.name;
   game.newBest = game.level > (climbBest[k] || 0);
   if (game.newBest){ climbBest[k] = game.level; try { localStorage.setItem('spacca_scalata', JSON.stringify(climbBest)); } catch(e){} }
@@ -1027,21 +971,9 @@ function drawClimbHUD(){
   ctx.fillStyle = 'rgba(26,28,44,0.85)'; ctx.fillRect(0, 0, W, 18);
   const k = game.players[0].kid;
   text('LIV ' + game.level, 4, 2, 8, '#fee761', 'left');
-  const goal = game.special ? meters(game.target) + '-' + meters(game.target + game.band) : '>' + meters(game.target);
-  text(goal, 4, 11, 6, k.shirt, 'left', false);
+  text(game.lockX !== null ? 'TIRI DA QUI' : 'INCASTRALO', 4, 11, 6, k.shirt, 'left', false);
   for (let i = 0; i < game.lives; i++) drawBall(W - 8 - i*10, 9, 0);
   ctx.fillStyle = k.shirt; ctx.fillRect(0, 16, W, 2);
-}
-function drawTargetLine(){
-  const y = Math.round(sy(game.target));
-  if (game.special){
-    const y2 = Math.round(sy(game.target + game.band));
-    ctx.fillStyle = 'rgba(254,231,97,0.12)'; ctx.fillRect(0, y2, W, y - y2);
-    ctx.fillStyle = '#fee761'; for (let x = 0; x < W; x += 8) ctx.fillRect(x, y2, 4, 1);
-  }
-  if (y < 0 || y > H) return;
-  ctx.fillStyle = '#fee761'; for (let x = 0; x < W; x += 8) ctx.fillRect(x, y, 4, 1);
-  text('OBIETTIVO', W - 18, y - 8, 6, '#fee761', 'right');
 }
 function drawClimbOver(){
   buttons = [];
@@ -1104,7 +1036,7 @@ async function saveScores(){
     const sc = Math.round(score(i));
     if (sc <= 0) return;
     const def = game.players.length === 1 ? lastName() : '';
-    const n = cleanName(window.prompt('Nome per la classifica (' + p.kid.name + ', ' + meters(sc) + ')', def));
+    const n = cleanName(window.prompt('Nome per la classifica (' + p.kid.name + ', ' + sc + ' incastri)', def));
     if (n) entries.push({ name: n, score: sc, mode: 'tiri' });
   });
   if (!entries.length) return;
@@ -1145,7 +1077,7 @@ function drawBoard(){
       const c = medal[k] || '#f4f4f4';
       text((k+1) + '.', 12, y, 6, c, 'left');
       text(String(r.name), 30, y, 6, c, 'left');
-      text(online.mode === 'scalata' ? 'LIV ' + r.score : meters(r.score), W - 12, y, 8, c, 'right');
+      text(online.mode === 'scalata' ? 'LIV ' + r.score : r.score + ' INC', W - 12, y, 8, c, 'right');
     });
   }
   button('INDIETRO', W/2 - 50, H - 34, 100, 22, () => { state = online.from; sfx.tick(); }, '#5a6988');
@@ -1188,8 +1120,8 @@ function drawMenu(){
   button('GIOCA!', W/2 - 78, 242, 74, 24, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
   button('SCALATA', W/2 + 4, 242, 74, 24, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
   button('CLASSIFICA', W/2 - 50, 274, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
-  if (online.list && online.list.length && online.listMode === 'tiri') text('TOP: ' + online.list[0].name + ' ' + meters(online.list[0].score), W/2, 300, 6, '#fee761', 'center', true);
-  else if (best > 0) text('RECORD SOLO ' + meters(best), W/2, 300, 6, '#fee761', 'center', true);
+  if (online.list && online.list.length && online.listMode === 'tiri') text('TOP: ' + online.list[0].name + ' ' + online.list[0].score + ' INC', W/2, 300, 6, '#fee761', 'center', true);
+  else if (best > 0) text('RECORD SOLO ' + best + ' INC', W/2, 300, 6, '#fee761', 'center', true);
   text('Incastralo più in alto!', W/2, 140, 6, '#f4f4f4', 'center', true);
 }
 
@@ -1197,10 +1129,10 @@ function drawOver(){
   if (isClimb()){ drawClimbOver(); return; }
   buttons = [];
   ctx.fillStyle = 'rgba(26,28,44,0.9)'; ctx.fillRect(10, 60, W-20, 200);
-  const ranking = game.players.map((p, i) => ({ p, i, s: score(i) })).sort((a,b) => b.s - a.s);
+  const ranking = game.players.map((p, i) => ({ p, i, s: score(i), d: game.closest[i] })).sort((a,b) => (b.s - a.s) || (a.d - b.d));
   if (game.players.length > 1){
     const top = ranking[0];
-    const tie = ranking.length > 1 && ranking[1].s === top.s;
+    const tie = ranking.length > 1 && ranking[1].s === top.s && ranking[1].d === top.d;
     text(tie ? 'PAREGGIO!' : 'VINCE', W/2, 72, 10, '#fee761');
     if (!tie){
       text(top.p.kid.name, W/2 + 10, 88, 14, top.p.kid.shirt);
@@ -1209,15 +1141,15 @@ function drawOver(){
     }
   } else {
     text('FINE!', W/2, 72, 12, '#fee761');
-    text(meters(score(0)), W/2, 90, 14, KIDS[0].shirt);
-    text('RECORD ' + meters(best), W/2, 108, 6, '#f4f4f4');
+    text(score(0) + ' INCASTRI', W/2, 90, 12, KIDS[0].shirt);
+    text('RECORD ' + best, W/2, 108, 6, '#f4f4f4');
   }
   ranking.forEach((r, k) => {
     const y = 120 + k*14;
     text((k+1) + '.', 30, y, 8, '#f4f4f4', 'left');
     ctx.fillStyle = r.p.kid.shirt; ctx.fillRect(50, y, 8, 8);
     text(r.p.kid.name, 62, y, 6, '#f4f4f4', 'left');
-    text(meters(r.s), W-24, y, 8, r.p.kid.shirt, 'right');
+    text(r.s + ' PT', W-24, y, 8, r.p.kid.shirt, 'right');
   });
   if (ONLINE && ranking.some(r => r.s > 0)){
     if (online.saved) button('CLASSIFICA', W/2 - 50, 188, 100, 16, () => openBoard('over'), '#3b5dc9');
@@ -1254,8 +1186,8 @@ cv.addEventListener('pointermove', e => {
   const p = toGame(e);
   const pl = cur();
   if (ptr.move){
-    pl.x = Math.max(8, Math.min(W - 14, pl.x + (p.x - ptr.x)));
-    ball.x = pl.x + 5;
+    if (game.lockX === null) pl.x = Math.max(kidMin(), Math.min(kidMax(), pl.x + (p.x - ptr.x)));
+    ball.x = ballStartX();
   } else {
     aimA = Math.max(-maxAngle(), Math.min(maxAngle(), aimA + (p.x - ptr.x)*0.012));
   }
@@ -1270,8 +1202,8 @@ cv.addEventListener('pointerup', release);
 cv.addEventListener('pointercancel', release);
 window.addEventListener('keydown', e => { // tastiera per PC
   if (state !== 'aim') return;
-  if (e.code === 'ArrowLeft'){ cur().x = Math.max(8, cur().x - 3); ball.x = cur().x + 5; }
-  if (e.code === 'ArrowRight'){ cur().x = Math.min(W-14, cur().x + 3); ball.x = cur().x + 5; }
+  if (e.code === 'ArrowLeft' && game.lockX === null){ cur().x = Math.max(kidMin(), cur().x - 2); ball.x = ballStartX(); }
+  if (e.code === 'ArrowRight' && game.lockX === null){ cur().x = Math.min(kidMax(), cur().x + 2); ball.x = ballStartX(); }
   if (e.code === 'KeyA') aimA = Math.max(-maxAngle(), aimA - 0.04);
   if (e.code === 'KeyD') aimA = Math.min(maxAngle(), aimA + 0.04);
   if (e.code === 'Space' && !charging){ audio(); banner = null; charging = true; chargeT = 0; }
