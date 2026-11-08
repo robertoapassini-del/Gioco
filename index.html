@@ -83,7 +83,7 @@ const KIDS = [
   { name:'LAZZO',  shirt:'#73eff7', mark:'#73eff7', top:'#f4f4f4', top2:'#e43b44', kit:'logo',
     shorts:'#3b5dc9', pants:true, hair:'#2a1a14', hairStyle:'short', beard:'#2a1a14', beardType:'full', glasses:'#41a6f6', skin:'#e0ac85' },
   { name:'EDDY',   shirt:'#a884f3', mark:'#a884f3', top:'#5d275d', top2:'#fee761', kit:'basket', sleeveless:true,
-    shorts:'#5d275d', bald:true, skin:'#c28569' },
+    shorts:'#5d275d', bald:true, beard:'#4a3426', beardType:'short', skin:'#e8b48e' },
   { name:'SARO',   shirt:'#38b764', mark:'#38b764', top:'#d9a07c', top2:'#1a1c2c', kit:'blackwork', sleeveless:true, muscle:true, hands:true,
     shorts:'#333c57', hair:'#8a6a48', hairStyle:'buzz', beard:'#4a3426', beardType:'thick', grey:'#a89888', sleeve:'#1a1c2c', skin:'#d9a07c' },
 ];
@@ -588,6 +588,10 @@ function drawKid(x, kid, active, kicking, baseY){
     px(kid.beard, X-3, base-18, 1, 1); px(kid.beard, X+2, base-18, 1, 1); px(kid.beard, X-3, base-17, 6, 2); px(kid.beard, X-2, base-15, 4, 1);
     px('#b55a50', X-1, base-17, 2, 1); px(kid.grey, X-2, base-16, 1, 1); px(kid.grey, X+1, base-15, 1, 1);
   }
+  else if (kid.beardType === 'short'){ // barba corta e curata, con il sorriso
+    px(kid.beard, X-3, base-17, 1, 2); px(kid.beard, X+2, base-17, 1, 2); px(kid.beard, X-2, base-16, 4, 1);
+    px(kid.beard, X-1, base-17, 2, 1); px('#f4f4f4', X-1, base-17, 2, 1); px(kid.beard, X-1, base-18, 2, 1);
+  }
   else if (kid.beardType === 'stubble'){ px(kid.beard, X-3, base-16, 6, 1); px(kid.beard, X-3, base-17, 1, 1); px(kid.beard, X+2, base-17, 1, 1); }
   else px('#b55a50', X, base-17, 1, 1);
   if (active){ // freccetta sopra il giocatore di turno
@@ -824,8 +828,8 @@ function climbOver(){
 }
 
 // ---------- Eddy: arriva Giammy, litigano e si spintonano ----------
-const GIAMMY_SAYS = ['SPOSTATI!', 'TOCCA A ME!', 'MUOVITI!', 'CHE FAI?!'];
-const EDDY_SAYS = ['OH!', 'LASSAMI STARI!', 'MA CHI SI?', 'VATTINNI!'];
+// la lite: Giammy pretende il turno, Eddy sbotta, poi parolacce da fumetto
+const GRAWLIX = ['@!#,@@', '#@!%&!', '$%#@!!', '@#!&%?', '!!@#$%'];
 function giammyHome(){
   const gi = game.players.findIndex(p => p.kid.name === 'GIAMMY');
   return gi >= 0 && gi !== game.turn ? game.players[gi].x : -14;
@@ -836,7 +840,7 @@ function setupEddy(){
   const from = giammyHome();
   game.eddy = { gx: from, from, phase: 'walk', t: 1.0 + Math.random()*1.2, say: null, sayT: 0, stumble: 0, gpush: 0 };
 }
-function eddySay(who, list){ game.eddy.say = { who, text: list[Math.floor(Math.random()*list.length)] }; game.eddy.sayT = 1.2; }
+function eddySay(who, t){ game.eddy.say = { who, text: Array.isArray(t) ? t[Math.floor(Math.random()*t.length)] : t }; game.eddy.sayT = 1.3; }
 function updateEddy(dt){
   const e = game.eddy;
   if (!e) return;
@@ -847,13 +851,14 @@ function updateEddy(dt){
   const ex = cur().x, target = ex + (ex < gapC(0) ? 11 : -11);
   if (e.phase === 'walk'){
     e.gx += Math.sign(target - e.gx) * 70 * dt;
-    if (Math.abs(target - e.gx) < 1.5){ e.gx = target; e.phase = 'argue'; eddySay('g', GIAMMY_SAYS); }
+    if (Math.abs(target - e.gx) < 1.5){ e.gx = target; e.phase = 'argue'; e.step = 0; e.t = 1.3; eddySay('g', 'EDDY, TOCCA A ME!'); }
   } else if (e.phase === 'argue'){
     e.gx += (target - e.gx) * Math.min(1, dt*8);
     if (banner) return;
     e.t -= dt;
     if (e.t <= 0){
       e.t = 1.1 + Math.random()*1.4;
+      if (e.step++ === 0){ eddySay('e', 'GIANMARCO SMETTILA!'); e.t = 1.3; return; }
       if (Math.random() < 0.65){ // Giammy spintona Eddy
         const dir = Math.sign(ex - e.gx) || 1;
         cur().x = Math.max(kidMin(), Math.min(kidMax(), cur().x + dir*(3 + Math.random()*3)));
@@ -862,10 +867,10 @@ function updateEddy(dt){
         aimA = Math.max(-maxAngle(), Math.min(maxAngle(), aimA + dir*(0.08 + Math.random()*0.15)));
         if (charging) chargeT += sweepTime() * (Math.random() - 0.5) * 0.6;
         beep(150, 0.08, 'square', 80, 0.1);
-        eddySay('e', EDDY_SAYS);
+        eddySay('e', GRAWLIX);
       } else { // Eddy spintona Giammy
         e.gpush = 0.35; beep(170, 0.08, 'square', 90, 0.08);
-        eddySay('g', GIAMMY_SAYS);
+        eddySay('g', GRAWLIX);
       }
     }
   } else if (e.phase === 'back'){
@@ -884,7 +889,8 @@ function drawEddyFight(){
     const bx = Math.round(Math.max(2, Math.min(W - w - 2, sx - w/2))), by = base - 44 - (e.say.who === 'g' ? 0 : 12);
     ctx.fillStyle = '#f4f4f4'; ctx.fillRect(bx, by, w, 11); ctx.fillRect(Math.round(sx), by + 11, 2, 3);
     ctx.fillStyle = '#1a1c2c'; ctx.fillRect(bx, by, w, 1); ctx.fillRect(bx, by + 10, w, 1);
-    text(e.say.text, bx + w/2, by + 3, 6, e.say.who === 'g' ? '#0099db' : '#5d275d', 'center', false);
+    const grawl = /^[^A-Z]+$/.test(e.say.text);
+    text(e.say.text, bx + w/2, by + 3, 6, grawl ? '#e43b44' : e.say.who === 'g' ? '#0099db' : '#5d275d', 'center', false);
   }
 }
 
