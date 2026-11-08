@@ -1145,30 +1145,200 @@ function button(label, x, y, w, h, onTap, color='#38b764'){
   buttons.push({ x, y, w, h, onTap });
 }
 
+// ---------- homepage: scena animata ----------
+let menuBg = null;
+const MS = { last: 0, t: 0, kicker: 0, phase: 'wait', pt: 1, kx: 0, ball: null, stuck: 3, falling: [], birds: [],
+             clouds: [], signT: 5, signOn: 0, dogX: -30, dogT: 8, pops: [] };
+const MG = () => ({ gl: Math.round(W/2 - 9), gr: Math.round(W/2 + 9), slab: 96, slabT: 12, street: 300, lroof: 70, rroof: 88 });
+function menuHome(i){ return [W*0.1, W*0.24, W*0.76, W*0.9, W*0.36][i]; }
+
+function buildMenuBg(){
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), R = rnd(77);
+  const r = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(Math.round(x), Math.round(y), w, h); };
+  const { gl, gr, slab, slabT, street, lroof, rroof } = MG();
+  // cielo a bande
+  [['#4f86c9', 0], ['#5f95d3', 22], ['#71a5dc', 42], ['#86b6e6', 62], ['#9cc6ea', 82]].forEach(([col, y]) => r(col, 0, y, W, H));
+  // palazzi
+  r('#8c6d6a', 0, lroof, gl, H); r('#77595a', gl - 4, lroof, 4, H);
+  r('#8c6d6a', gr, rroof, W - gr, H); r('#6e5254', gr, rroof, 3, H);
+  for (let i = 0; i < 90; i++) r(R() < 0.5 ? '#84655f' : '#957572', R()*W, lroof + R()*(H - lroof), 2 + (R()*8|0), 1);
+  // tetti con pergole rosse
+  const roof = (x0, x1, ty) => {
+    r('#9a7b78', x0, ty, x1 - x0, 12); r('#b0908c', x0, ty, x1 - x0, 1);
+    r('rgba(200,225,235,0.85)', x0, ty - 22, x1 - x0, 5);
+    g.fillStyle = '#c8323c';
+    for (let x = x0; x < x1; x += 7) g.fillRect(x, ty - 22, 1, 5);
+    g.fillRect(x0, ty - 22, x1 - x0, 1); g.fillRect(x0, ty - 17, x1 - x0, 1);
+    for (let x = x0 + 6; x < x1; x += 28) for (let k = 0; k < 22; k++) g.fillRect(x + (k/4|0), ty - 22 + k, 2, 1);
+  };
+  roof(0, gl, lroof); roof(gr - 6, W, rroof);
+  r('#c48a7a', 10, lroof + 4, 12, 4); // intonaco scrostato
+  // la spacca
+  r('#2a2130', gl, slab + slabT, gr - gl, H);
+  for (let i = 0; i < 70; i++) r(R() < 0.5 ? '#2f5a35' : '#3e7a3e', gl + R()*(gr - gl - 3), 230 + R()*55, 3, 2);
+  for (let y = street - 18; y < street; y += 4) r('#5b4a48', gl, y, gr - gl, 2);
+  r('#fff6c8', gl + 1, 250, 3, 3); r('#fff6c8', gl + 1, 214, 3, 3);
+  // lo sbalzo e l'incastro
+  r('#9a7b78', gl - 6, slab, W - gl + 6, slabT); r('#b0908c', gl - 6, slab, W - gl + 6, 1); r('#4a3638', gl - 6, slab + slabT - 2, W - gl + 6, 2);
+  r('#1c0f0a', gl - 3, slab + slabT, 3, 8); r('#1c0f0a', gl, slab + slabT, 5, 2);
+  // finestre, balconi e condizionatori
+  const floor = (x, y, w) => {
+    r('#5a3a30', x - 1, y - 21, w + 2, 22); r('#3b3040', x, y - 20, w, 20); r('#a8652e', x, y - 20, w, 7);
+    for (let k = 0; k < 7; k += 2) r('#8a4f24', x, y - 20 + k, w, 1);
+    r('#d8d0c8', x - 3, y, w + 6, 3); r('#a89c94', x - 3, y + 3, w + 6, 1); r('#d8343f', x - 3, y - 8, w + 6, 1);
+    for (let k = 0; k <= w + 6; k += 3) r('#d8343f', x - 3 + k, y - 8, 1, 8);
+  };
+  for (let y = 132; y < 280; y += 40){
+    if (gl > 44) floor(gl - 30, y, 16);
+    if (y > 140 && gl > 70) floor(8, y, 16);
+    if (y > rroof + 30){ floor(gr + 10, y, 16); if (W - gr > 60) floor(gr + 38, y, 16); }
+  }
+  r('#e8e8e8', gr + 4, 150, 9, 6); r('#9aa0a8', gr + 6, 151, 4, 4);
+  r('#e8e8e8', 4, 186, 9, 6); r('#9aa0a8', 6, 187, 4, 4);
+  // la finestra della signora
+  r('#5a3a30', 6, 104, 20, 22); r('#3b3040', 8, 106, 16, 18);
+  // marciapiede e strada
+  r('#8b9bb4', 0, street, W, 6); r('#c0cbdc', 0, street, W, 1);
+  for (let x = 0; x < W; x += 16) r('#c0cbdc', x, street, 1, 6);
+  r('#3a4466', 0, street + 6, W, H);
+  for (let x = 4; x < W; x += 24) r('#c0cbdc', x, street + 13, 12, 2);
+  menuBg = c;
+  MS.clouds = [0, 1, 2].map(i => ({ x: R()*W, y: 8 + i*16 + R()*6, w: 16 + (R()*14|0), v: 3 + R()*4 }));
+  MS.birds = [0, 1].map(i => ({ x: R()*W, y: 116 + i*14, v: (R() < 0.5 ? -1 : 1) * (14 + R()*10), ph: R()*6 }));
+}
+
+function menuKick(){
+  const { gl, gr, slab, slabT, street } = MG();
+  const strong = Math.random();
+  MS.ball = { x: MS.kx + 4, y: street - 4, vx: (Math.random() < 0.5 ? -1 : 1) * (60 + Math.random()*140), vy: -(300 + strong*120), owner: MS.kicker, done: false };
+}
+function updateMenu(dt){
+  MS.t += dt;
+  const { gl, gr, slab, slabT, street } = MG();
+  for (const c of MS.clouds){ c.x += c.v*dt; if (c.x > W + 30) c.x = -c.w - 10; }
+  for (const b of MS.birds){ b.x += b.v*dt; if (b.x < -10) b.x = W + 10; if (b.x > W + 10) b.x = -10; }
+  // un figghiuleddu entra nel vialetto, calcia e torna al suo posto
+  MS.pt -= dt;
+  const home = menuHome(MS.kicker), spot = W/2 - 3;
+  if (MS.phase === 'wait' && MS.pt <= 0){ MS.phase = 'in'; MS.kx = home; }
+  if (MS.phase === 'in'){ MS.kx += Math.sign(spot - MS.kx) * 50 * dt; if (Math.abs(MS.kx - spot) < 1){ MS.kx = spot; MS.phase = 'kick'; MS.pt = 0.5; } }
+  if (MS.phase === 'kick' && MS.pt <= 0){ MS.phase = 'fly'; menuKick(); }
+  if (MS.phase === 'out'){ MS.kx += Math.sign(home - MS.kx) * 50 * dt; if (Math.abs(MS.kx - home) < 1){ MS.phase = 'wait'; MS.pt = 1.2; MS.kicker = (MS.kicker + 1) % 5; } }
+  const b = MS.ball;
+  if (b && !b.done){
+    const steps = 6, h = dt/steps;
+    for (let s = 0; s < steps && !b.done; s++){
+      b.vy += 300*h; b.x += b.vx*h; b.y += b.vy*h;
+      const lo = gl + 3.5, hi = gr - 3.5;
+      if (b.y < street - 20){
+        if (b.x < lo){ b.x = lo; b.vx = Math.abs(b.vx)*0.5; b.vy *= 0.97; }
+        if (b.x > hi){ b.x = hi; b.vx = -Math.abs(b.vx)*0.5; b.vy *= 0.97; }
+      }
+      const top = slab + slabT + 3.5;
+      if (MS.stuck >= 0 && Math.hypot(b.x - lo, b.y - top) < 7){ // butta giù quello incastrato
+        MS.falling.push({ x: lo, y: top, vx: 30, vy: -30, owner: MS.stuck }); MS.stuck = -1;
+        MS.pops.push({ text: 'GIU!', x: lo + 16, y: top + 4, t: 1 });
+      }
+      if (b.y <= top && b.vy < 0){
+        if (MS.stuck < 0 && b.x <= lo + 6){
+          b.done = true; MS.stuck = b.owner; MS.ball = null;
+          MS.pops.push({ text: 'INCASTRATO!', x: W/2, y: top + 14, t: 1.3 });
+          MS.phase = 'out';
+        } else { b.y = top; b.vy = -b.vy*0.3; }
+      }
+      if (b.y >= street - 4 && b.vy > 0){ MS.ball = null; MS.phase = 'out'; b.done = true; }
+    }
+  }
+  for (const f of MS.falling){ f.vy += 300*dt; f.x += f.vx*dt; f.y += f.vy*dt; }
+  MS.falling = MS.falling.filter(f => f.y < street);
+  for (const p of MS.pops){ p.t -= dt; p.y -= 12*dt; }
+  MS.pops = MS.pops.filter(p => p.t > 0);
+  // la signora si affaccia ogni tanto
+  MS.signT -= dt;
+  if (MS.signT <= 0){ MS.signOn = 2.2; MS.signT = 8 + Math.random()*6; }
+  if (MS.signOn > 0) MS.signOn -= dt;
+  // il cane passa sulla strada
+  MS.dogT -= dt;
+  if (MS.dogT <= 0){ MS.dogX += 30*dt; if (MS.dogX > W + 30){ MS.dogX = -30; MS.dogT = 12 + Math.random()*8; } }
+}
+function drawMenuScene(){
+  const now = performance.now()/1000, dt = Math.min(0.05, MS.last ? now - MS.last : 0); MS.last = now;
+  if (!menuBg || menuBg.width !== W) buildMenuBg();
+  updateMenu(dt);
+  const { gl, slab, slabT, street } = MG();
+  ctx.drawImage(menuBg, 0, 0);
+  // nuvole
+  for (const c of MS.clouds){ ctx.fillStyle = '#f4f4f4'; ctx.fillRect(Math.round(c.x), c.y, c.w, 4); ctx.fillRect(Math.round(c.x) + 4, c.y - 3, c.w - 8, 3); }
+  // la signora
+  if (MS.signOn > 0){
+    const bob = Math.round(Math.sin(MS.t*30));
+    ctx.fillStyle = '#c0cbdc'; ctx.fillRect(13, 107 + bob, 6, 2); ctx.fillRect(15, 105 + bob, 2, 2);
+    ctx.fillStyle = '#f2c6a0'; ctx.fillRect(13, 109 + bob, 6, 5);
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(14, 110 + bob, 1, 1); ctx.fillRect(17, 110 + bob, 1, 1);
+    ctx.fillStyle = '#5d275d'; ctx.fillRect(15, 112 + bob, 2, 2);
+    ctx.fillStyle = '#b55088'; ctx.fillRect(11, 114, 10, 10);
+    ctx.fillStyle = '#f2c6a0'; ctx.fillRect(21, 108 + bob*2, 2, 5);
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(28, 102, 40, 12); ctx.fillRect(24, 108, 4, 2);
+    text('OUUUU!', 48, 105, 6, '#e43b44', 'center', false);
+  }
+  // pallone incastrato e palloni che cadono
+  const top = slab + slabT + 3.5;
+  if (MS.stuck >= 0) drawBallMenu(gl + 3.5, top, MS.stuck);
+  for (const f of MS.falling) drawBallMenu(f.x, f.y, f.owner);
+  if (MS.ball) drawBallMenu(MS.ball.x, MS.ball.y, -1);
+  // piccioni
+  for (const b of MS.birds){
+    const X = Math.round(b.x), Y = Math.round(b.y), f = Math.sin(MS.t*14 + b.ph) > 0, d = b.v > 0 ? 1 : -1;
+    ctx.fillStyle = '#5a6988'; ctx.fillRect(X-3, Y-1, 6, 3);
+    ctx.fillStyle = '#8b9bb4'; ctx.fillRect(X-2, f ? Y-4 : Y+1, 4, f ? 3 : 2);
+    ctx.fillStyle = '#5a6988'; ctx.fillRect(X + d*3 - (d<0?1:0), Y-2, 2, 2);
+  }
+  // figghiuleddi sul marciapiede
+  for (let i = 0; i < 5; i++){
+    const kicking = i === MS.kicker && MS.phase !== 'wait';
+    const x = kicking ? MS.kx : menuHome(i);
+    const kick = kicking && MS.phase === 'fly' && MS.ball && MS.ball.y > street - 40;
+    drawKid(x, KIDS[i], false, kick, street);
+    if (kicking && MS.phase === 'kick') drawBallMenu(x + 4, street - 4, -1);
+  }
+  // il cane
+  if (MS.dogT <= 0){
+    const X = Math.round(MS.dogX), base = street + 1, step = Math.sin(MS.t*20) > 0 ? 1 : 0;
+    ctx.fillStyle = '#8a5a38'; ctx.fillRect(X - 5, base - 7, 10, 4); ctx.fillRect(X + 5, base - 10, 4, 4);
+    ctx.fillRect(X - 4, base - 3, 2, 3 - step); ctx.fillRect(X + 2, base - 3, 2, 2 + step); ctx.fillRect(X - 6, base - 9, 1, 3);
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(X + 8, base - 9, 1, 1);
+    if (Math.abs(X - W/2) < 20) text('BAU!', X + 4, base - 22, 6, '#f4f4f4');
+  }
+  for (const p of MS.pops) text(p.text, p.x, Math.round(p.y), 6, '#fee761');
+}
+function drawBallMenu(x, y, owner){
+  const X = Math.round(x), Y = Math.round(y);
+  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(X-3, Y-4, 7, 9); ctx.fillRect(X-4, Y-3, 9, 7);
+  ctx.fillStyle = '#f4f4f4'; ctx.fillRect(X-2, Y-3, 5, 7); ctx.fillRect(X-3, Y-2, 7, 5);
+  if (owner >= 0){ ctx.fillStyle = KIDS[owner].mark; ctx.fillRect(X-1, Y-1, 3, 2); }
+}
+// titolo con il bordo scuro, leggibile sul cielo
+function titleText(s, x, y, size, color){
+  ctx.font = size + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#1a1c2c';
+  for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[1,1],[2,2],[-1,-1],[1,-1],[-1,1]]) ctx.fillText(s, x + dx, y + dy);
+  ctx.fillStyle = color; ctx.fillText(s, x, y);
+}
+
 function drawMenu(){
   buttons = [];
-  const t = performance.now()/1000;
-  // sfondo: muro con crepa
-  ctx.fillStyle = '#8c6d6a'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 84, 18, H);
-  ctx.fillStyle = '#9a7b78'; ctx.fillRect(W/2 - 15, 80, W, 8);
-  ctx.fillStyle = '#d8343f';
-  for (const [bx, byy] of [[8,100],[W-34,100]]){ ctx.fillRect(bx, byy, 26, 1); for (let k=0;k<=26;k+=3) ctx.fillRect(bx+k, byy, 1, 8); }
-  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 26, W, 54);
-  text('PALLONE', W/2, 34, 14, '#fee761');
-  text('NELLA', W/2, 50, 8, '#f4f4f4');
-  text('SPACCA', W/2, 62, 14, '#e43b44');
-  // pallone che rimbalza
-  const by = 126 - Math.abs(Math.sin(t*3))*28;
-  drawBall(W/2, by, t*8);
-
-  text('Incastralo lassù!', W/2, 140, 6, '#f4f4f4', 'center', true);
-  button('SINGLE PLAYER', W/2 - 66, 158, 132, 26, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
-  text('sali di livello da solo', W/2, 188, 6, '#f4f4f4', 'center', true);
-  button('MULTIPLAYER', W/2 - 66, 204, 132, 26, () => { audio(); state = 'setup'; sfx.tick(); }, '#e43b44');
-  text('sfida i tuoi amici', W/2, 234, 6, '#f4f4f4', 'center', true);
-  button('CLASSIFICA', W/2 - 50, 256, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
-  if (online.list && online.list.length && online.listMode === 'scalata') text('TOP: ' + online.list[0].name + ' LIV ' + online.list[0].score, W/2, 284, 6, '#fee761', 'center', true);
+  drawMenuScene();
+  titleText('PALLONE', W/2, 8, 14, '#fee761');
+  titleText('NELLA', W/2, 25, 8, '#f4f4f4');
+  titleText('SPACCA', W/2, 36, 14, '#e43b44');
+  text('Incastralo lassù!', W/2, 55, 6, '#f4f4f4', 'center', true);
+  button('SINGLE PLAYER', W/2 - 66, 146, 132, 24, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
+  text('sali di livello da solo', W/2, 174, 6, '#f4f4f4', 'center', true);
+  button('MULTIPLAYER', W/2 - 66, 188, 132, 24, () => { audio(); state = 'setup'; sfx.tick(); }, '#e43b44');
+  text('sfida i tuoi amici', W/2, 216, 6, '#f4f4f4', 'center', true);
+  button('CLASSIFICA', W/2 - 50, 230, 100, 16, () => { audio(); openBoard('menu'); }, '#3b5dc9');
+  if (online.list && online.list.length && online.listMode === 'scalata') text('TOP: ' + online.list[0].name + ' LIV ' + online.list[0].score, W/2, 252, 6, '#fee761', 'center', true);
 }
 
 // schermata multiplayer: quanti giocatori e quanti tiri
