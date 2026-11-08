@@ -4,7 +4,7 @@ Gioco arcade in pixel art per cellulare. Ogni giocatore ha il suo figghiuleddu e
 dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il pallone più in alto.
 
 ## Come si gioca
-All'avvio scegli **SINGLE PLAYER** (da solo, a livelli) oppure **MULTIPLAYER** (da 2 a 8 amici sullo stesso telefono, a turno).
+All'avvio scegli **SINGLE PLAYER** (da solo, a livelli) oppure **MULTIPLAYER** (da 2 a 6 amici sullo stesso telefono, a turno).
 
 Si tira da dentro la spacca, dal vialetto che porta alle scale. C'è **un solo punto** dove il pallone si incastra:
 **in alto a sinistra, sotto lo sbalzo**.
@@ -15,7 +15,7 @@ Si tira da dentro la spacca, dal vialetto che porta alle scale. C'è **un solo p
 - Il pallone incastrato **resta lassù**, e il prossimo deve **buttarlo giù**.
 - Punti: **+1 per ogni incastro**, **+1 se butti giù il pallone di un altro**. In caso di pareggio vince chi è andato più vicino all'incastro (il gioco mostra la distanza in cm dopo ogni tiro).
 - Il **vento** soffia a raffiche e cresce a ogni round. I **piccioni** deviano il pallone.
-- In multiplayer giocano da 2 a 8 figghiuleddi (Uca, Fabio, Tano, Giammy, Paso, Lazzo, Eddy e Saro), con 3 o 5 tiri a testa.
+- In multiplayer giocano da 2 a 6 figghiuleddi (Uca, Fabio, Tano, Giammy, Paso e Lazzo), con 3 o 5 tiri a testa.
 
 ## Single player
 Scegli il tuo figghiuleddu: ogni livello si supera **incastrando il pallone**. Hai 3 palloni, e ogni tiro sbagliato te ne
@@ -38,8 +38,6 @@ Ognuno ha le sue caratteristiche, sia in single player sia in multiplayer:
 | Giammy | il meno preciso: l'angolo del tiro gli sbanda |
 | Paso | non ci vede bene: durante il suo turno è tutto sfocato |
 | Lazzo | tira fortissimo, ma regolare la potenza è un dramma: la barra gli scappa e se tira troppo forte il pallone rimbalza via. Quando tira forte: *SBAUM!* Quando incastra si gira, si toglie gli occhiali e la telecamera stringe sui suoi occhi spalancati: *BELLINO!* |
-| Eddy | calvo, con la canotta da basket: spesso arriva Giammy, litigano e si spintonano, e a ogni spinta Eddy si sposta e la mira gli balla |
-| Saro | tutto muscoli e tatuaggi, lancia con le mani: tira più forte, dritto, e ha la freccia di mira più lunga |
 
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages
