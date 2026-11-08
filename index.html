@@ -93,7 +93,11 @@ function gapC(y){ return W/2; }
 function gapHW(y){ return 16 * (game && game.gapScale || 1); }
 // l'unico punto dove il pallone si incastra: in alto a sinistra, sotto lo sbalzo
 function nicheX(){ return gapC(BRIDGE) - gapHW(BRIDGE) + BALL_R; }
-const NICHE_Y = BRIDGE - BALL_R;
+// la scena sta tutta in uno schermo: il mondo è compresso in verticale
+const STREET_Y = 300, SLAB_Y = 96, SLAB_T = 12;
+const KY = (STREET_Y - SLAB_Y - SLAB_T) / BRIDGE;   // pixel per unità di altezza
+const BALL_RY = BALL_R / KY;                         // raggio del pallone in unità di altezza
+const NICHE_Y = BRIDGE - BALL_RY;
 function nicheTol(){ return isClimb() ? Math.max(3.5, 6.5 - (game.level - 1)*0.2) : 6; }
 // dove può stare il figghiuleddu nel vialetto (dentro la spacca)
 function kidMin(){ return gapC(0) - gapHW(0) + 5; }
@@ -111,7 +115,7 @@ function makeGame(mode){
 function newGame(){
   makeGame('party');
   // chi aspetta sta sul marciapiede, ai lati della spacca
-  const homes = [W*0.3, W*0.72, W*0.21, W*0.84, W*0.95];
+  const homes = [W*0.3, W*0.72, W*0.17, W*0.86, W*0.05 + 3];
   for (let i=0;i<menu.players;i++){
     game.players.push({ kid:KIDS[i], home: homes[i], x: homes[i], gx: gapC(0) + 4 });
     game.points.push(0); game.closest.push(Infinity);
@@ -125,112 +129,9 @@ const cm = d => Math.max(1, Math.round(d)) + ' cm';
 const meters = y => (y/100).toFixed(1) + 'm';
 
 // ================== PALAZZI E SPACCA (pre-renderizzati) ==================
-let wallCv = null;
-const WALL_IMG_H = WALL_TOP + 60;
 function rnd(seed){ let s = seed; return () => (s = (s*16807) % 2147483647) / 2147483647; }
-function buildWall(){
-  game.solids = [];
-  wallCv = document.createElement('canvas');
-  wallCv.width = W; wallCv.height = WALL_IMG_H;
-  const w = wallCv.getContext('2d');
-  const R = rnd(4242);
-  const row = wy => WALL_TOP + 40 - wy;
-  const rect = (c, x, y, ww, hh) => { w.fillStyle = c; w.fillRect(Math.round(x), Math.round(y), ww, hh); };
-  // cielo
-  rect('#7fb2e0', 0, 0, W, WALL_IMG_H);
-  rect('#9cc6ea', 0, row(RIGHT_TOP) - 60, W, 60);
-  // facciate e fessura, riga per riga
-  for (let y = 0; y < WALL_TOP; y++){
-    const c = gapC(y), hw = gapHW(y), gl = Math.round(c - hw), gr = Math.round(c + hw), r = row(y);
-    rect('#8c6d6a', 0, r, gl, 1);                                  // palazzo sinistro
-    rect('#77595a', gl - 4, r, 4, 1);                               // spigolo in ombra
-    if (y < RIGHT_TOP){ rect('#8c6d6a', gr, r, W - gr, 1); rect('#6e5254', gr, r, 3, 1); }
-    // dentro la spacca
-    if (y < BRIDGE){
-      let col = '#2a2130';
-      if (y < 520) col = y < 70 ? '#3a2e34' : '#253b2c';
-      rect(col, gl, r, gr - gl, 1);
-    } else if (y < RIGHT_TOP) rect('#6e5254', gl, r, gr - gl, 1);
-  }
-  // alberi in fondo alla spacca, scale e lampioni
-  for (let i = 0; i < 160; i++){
-    const y = 70 + R()*450, c = gapC(y), hw = gapHW(y);
-    rect(R() < 0.5 ? '#2f5a35' : '#3e7a3e', c - hw + R()*(hw*2 - 3), row(y), 3, 2);
-  }
-  for (let y = 4; y < 70; y += 6){ const c = gapC(y), hw = gapHW(y); rect('#5b4a48', c - hw, row(y), hw*2, 2); }
-  for (const ly of [95, 150]){
-    const c = gapC(ly), hw = gapHW(ly);
-    rect('#3a2e34', c - hw, row(ly) + 1, 3, 1);
-    rect('#fff6c8', c - hw + 2, row(ly) - 2, 4, 4);
-    rect('rgba(255,240,180,0.25)', c - hw + 1, row(ly) - 4, 7, 8);
-  }
-  // piani: finestre, balconi rossi, condizionatori
-  const floor = (x, fy, wid) => {
-    const r = row(fy);
-    game.solids.push({ x0: x - 3, x1: x + wid + 3, y0: fy - 4, y1: fy + 9, kind: 'balcone' });
-    rect('#5a3a30', x - 1, r - 23, wid + 2, 24);
-    rect('#3b3040', x, r - 22, wid, 22);
-    rect('#a8652e', x, r - 22, wid, 8);
-    for (let k = 0; k < 8; k += 2) rect('#8a4f24', x, r - 22 + k, wid, 1);
-    // balcone
-    rect('#d8d0c8', x - 3, r, wid + 6, 3);
-    rect('#a89c94', x - 3, r + 3, wid + 6, 1);
-    rect('#d8343f', x - 3, r - 9, wid + 6, 1);
-    for (let k = 0; k <= wid + 6; k += 3) rect('#d8343f', x - 3 + k, r - 9, 1, 9);
-    rect('rgba(216,52,63,0.35)', x - 3, r - 8, wid + 6, 8);
-  };
-  const ac = (x, y) => { const r = row(y); game.solids.push({ x0: x, x1: x + 10, y0: y - 7, y1: y, kind: 'clima' }); rect('#e8e8e8', x, r, 10, 7); rect('#9aa0a8', x + 2, r + 1, 5, 5); rect('#e8e8e8', x + 4, r + 3, 1, 1); };
-  for (let fy = 300; fy < WALL_TOP - 120; fy += 260){
-    const cL = gapC(fy) - gapHW(fy);
-    if (cL > 40) floor(6, fy, 20);
-    if (cL > 70) floor(cL - 34, fy, 18);
-    if (fy < RIGHT_TOP - 140){
-      const cR = gapC(fy) + gapHW(fy);
-      if (W - cR > 34) floor(cR + 10, fy, 18);
-      if (W - cR > 64) floor(cR + 40, fy, 18);
-    }
-    if (R() < 0.6) ac(R() < 0.5 ? 2 : Math.max(2, cL - 16), fy + 40);
-    if (fy < RIGHT_TOP - 140 && R() < 0.6) ac(gapC(fy) + gapHW(fy) + 6, fy + 70);
-  }
-  // piano terra: cancello a griglia a sinistra, siepe e recinzione a destra
-  { const gl = gapC(40) - gapHW(40), r = row(110);
-    rect('#c2b29a', 2, r - 4, gl - 12, 6);
-    rect('#fff6c8', 8, r + 2, 24, 2);
-    rect('#2b2a33', 4, r + 6, gl - 16, 104);
-    w.fillStyle = '#4c4a58';
-    for (let x = 4; x < gl - 12; x += 4) w.fillRect(x, r + 6, 1, 104);
-    for (let y = r + 6; y < r + 110; y += 4) w.fillRect(4, y, gl - 16, 1);
-    const gr = gapC(40) + gapHW(40);
-    rect('#1f1f28', gr + 6, row(80), 2, 80);
-    for (let i = 0; i < 70; i++) rect(R() < 0.5 ? '#3e7a3e' : '#5a9a48', gr + 8 + R()*(W - gr - 10), row(10 + R()*70), 4, 3);
-  }
-  // l'incastro: l'angolo in alto a sinistra, sotto lo sbalzo
-  { const x0 = Math.round(gapC(BRIDGE) - gapHW(BRIDGE)), r = row(BRIDGE);
-    rect('#1c0f0a', x0 - 3, r, 3, 9); rect('#1c0f0a', x0, r, 5, 2);
-    rect('#4a3638', x0 - 3, r + 9, 3, 1); }
-  // sbalzo del palazzo di destra che chiude la spacca
-  { const c = gapC(BRIDGE), hw = gapHW(BRIDGE), x0 = Math.round(c - hw - 6);
-    rect('#9a7b78', x0, row(BRIDGE + BRIDGE_T), W - x0, BRIDGE_T);
-    rect('#b0908c', x0, row(BRIDGE + BRIDGE_T), W - x0, 2);
-    rect('#4a3638', x0, row(BRIDGE), W - x0, 3);
-    rect('#fee761', Math.round(c) - 1, row(BRIDGE) + 3, 2, 2); }
-  // tetti con le pergole rosse
-  const roof = (x0, x1, ty) => {
-    rect('#9a7b78', x0, row(ty), x1 - x0, 22);
-    rect('#b0908c', x0, row(ty), x1 - x0, 2);
-    rect('#c48a7a', x0 + 10, row(ty) + 8, 14, 5); // intonaco scrostato
-    const top = row(ty) - 26;
-    rect('rgba(200,225,235,0.8)', x0, top, x1 - x0, 6);
-    w.fillStyle = '#c8323c';
-    for (let x = x0; x < x1; x += 7) w.fillRect(x, top, 1, 6);
-    w.fillRect(x0, top, x1 - x0, 1); w.fillRect(x0, top + 6, x1 - x0, 1);
-    for (let x = x0 + 8; x < x1; x += 34) for (let k = 0; k < 26; k++) w.fillRect(x + (k / 4 | 0), top + k, 2, 1);
-  };
-  roof(0, Math.round(gapC(WALL_TOP) - gapHW(WALL_TOP)), WALL_TOP);
-  roof(Math.round(gapC(RIGHT_TOP) - gapHW(RIGHT_TOP)) - 6, W, RIGHT_TOP);
-  // tacche dei metri sul bordo sinistro
-  for (let m = 1; m * 100 < WALL_TOP; m++) rect('#5a4040', 0, row(m * 100), m % 5 === 0 ? 6 : 3, 1);
-}
+let sceneBg = null;
+function buildWall(){ game.solids = []; sceneBg = buildSceneBg(gapHW(0)); }
 
 // ================== TURNI ==================
 let ball = null, kidAnim = 0, wind = 0, power = 0, charging = false, chargeT = 0;
@@ -249,7 +150,7 @@ function startTurn(){
   state = 'aim';
   const p = cur();
   p.x = game.lockX !== null ? game.lockX : Math.max(kidMin(), Math.min(kidMax(), p.gx));
-  ball = { x: ballStartX(), y: BALL_R, vx: 0, vy: 0, spin: 0, bounces: 0, ground: 0, stillT: 0, flyT: 0, minD: Infinity, knocked: -1 };
+  ball = { x: ballStartX(), y: BALL_RY, vx: 0, vy: 0, spin: 0, bounces: 0, ground: 0, stillT: 0, flyT: 0, minD: Infinity, knocked: -1 };
   aimA = 0;
   wind = (Math.random()*2 - 1) * (10 + game.round*6);
   gustAmp = 6 + game.round*4; gustF = 1.2 + Math.random()*1.5; gustPh = Math.random()*6.28;
@@ -275,10 +176,10 @@ function kick(){
   if (perk('GIAMMY')){
     const dev = (Math.random() - 0.5) * 0.18;
     a = Math.max(-0.6, Math.min(0.6, a + dev));
-    if (Math.abs(dev) > 0.05) popup('SBANDA!', p.x, 34, cur().kid.shirt);
+    if (Math.abs(dev) > 0.05) popup('SBANDA!', p.x, 34/KY, cur().kid.shirt);
   }
   ball.vx = ball.vy * Math.tan(a) + (Math.random()-0.5)*6;
-  ball.x = ballStartX(); ball.y = BALL_R + 4;
+  ball.x = ballStartX(); ball.y = BALL_RY + 4;
   kidAnim = 0.3;
   state = 'flight';
   sfx.kick();
@@ -345,21 +246,21 @@ function update(dt){
       // c'è un pallone incastrato lassù? se lo prendi lo butti giù
       const n = game.niche;
       if (n.owner >= 0){
-        const dx = ball.x - nicheX(), dy = ball.y - NICHE_Y;
-        if (dx*dx + dy*dy < 4*BALL_R*BALL_R) knockNiche();
+        const dx = ball.x - nicheX(), dy = (ball.y - NICHE_Y)*KY;
+        if (dx*dx + dy*dy < 30) knockNiche();
       }
       // lo sbalzo: nell'angolo a sinistra si incastra (anche se arriva forte), altrove rimbalza giù
-      if (ball.y >= BRIDGE - BALL_R && ball.vy > 0){
+      if (ball.y >= BRIDGE - BALL_RY && ball.vy > 0){
         if (n.owner < 0 && ball.x <= lo + nicheTol()){ wedge(); break; }
-        ball.y = BRIDGE - BALL_R; ball.vy = -ball.vy*0.3; ball.vx *= 0.7; sfx.bounce();
+        ball.y = BRIDGE - BALL_RY; ball.vy = -ball.vy*0.3; ball.vx *= 0.7; sfx.bounce();
         game.particles.push({ x: ball.x, y: BRIDGE, vx: 0, vy: -20, t: 0.5, c: '#9a7b78' });
       }
-      ball.minD = Math.min(ball.minD, Math.hypot(ball.x - nicheX(), NICHE_Y - ball.y));
-      if (state==='flight' && ball.y <= BALL_R && ball.vy < 0){
-        ball.y = BALL_R;
+      ball.minD = Math.min(ball.minD, Math.hypot((ball.x - nicheX())*5, NICHE_Y - ball.y)); // in cm (1 px ≈ 5 cm)
+      if (state==='flight' && ball.y <= BALL_RY && ball.vy < 0){
+        ball.y = BALL_RY;
         if (ball.vy < -220 && ball.ground < 2){ // rimbalzo sul marciapiede
           ball.ground++; ball.vy = -ball.vy*0.42; ball.vx *= 0.7; sfx.bounce();
-          popup('BOING', ball.x, 14, '#f4f4f4');
+          popup('BOING', ball.x, 14/KY, '#f4f4f4');
         } else { sfx.miss(); endTurn(missRes()); }
       }
       // fermo su un balcone?
@@ -367,7 +268,6 @@ function update(dt){
         if (ball.flyT > 12){ sfx.miss(); endTurn(missRes()); }
       }
     }
-    camTarget = Math.max(0, Math.min(WALL_TOP - H*0.5, ball.y - H*0.45));
   }
 
   if (state === 'result'){
@@ -388,9 +288,9 @@ function update(dt){
     else { b.x += b.vx*dt; b.y += Math.sin(game.t*2 + b.ph)*8*dt; }
     if (b.x < -10) b.x = W + 10; if (b.x > W + 10) b.x = -10;
   }
-  for (const u of game.popups){ u.t -= dt; u.y += 25*dt; }
+  for (const u of game.popups){ u.t -= dt; u.y += 25*dt/KY; }
   game.popups = game.popups.filter(u => u.t > 0);
-  for (const q of game.particles){ q.t -= dt; q.x += q.vx*dt; q.y += q.vy*dt; q.vy -= 300*dt; }
+  for (const q of game.particles){ q.t -= dt; q.x += q.vx*dt; q.y += q.vy*dt/KY; q.vy -= 300*dt; }
   game.particles = game.particles.filter(q => q.t > 0);
 }
 
@@ -436,7 +336,7 @@ function spawnBirds(){
 function hitBirds(){
   for (const b of game.birds){
     if (b.scared > 0) continue;
-    const dx = ball.x - b.x, dy = ball.y - b.y;
+    const dx = ball.x - b.x, dy = (ball.y - b.y)*KY;
     if (dx*dx + dy*dy < 36){
       b.scared = 3;
       if (perk('FABIO')){ popup('SBAM!', b.x, b.y + 8, '#e43b44'); }
@@ -464,8 +364,8 @@ function knockNiche(){
   ball.knocked = prev;
   if (!isClimb() && prev !== game.turn){
     game.points[game.turn]++;
-    popup('GIU! +1', nicheX() + 14, NICHE_Y - 6, cur().kid.shirt);
-  } else popup(prev === game.turn ? 'OPS!' : 'GIU!', nicheX() + 14, NICHE_Y - 6, '#f4f4f4');
+    popup('GIU! +1', nicheX() + 16, NICHE_Y - 14/KY, cur().kid.shirt);
+  } else popup(prev === game.turn ? 'OPS!' : 'GIU!', nicheX() + 16, NICHE_Y - 14/KY, '#f4f4f4');
 }
 function wedge(){
   const n = game.niche;
@@ -478,7 +378,7 @@ function wedge(){
 }
 
 // ================== DISEGNO ==================
-const sy = wy => H - GROUND - (wy - cam); // altezza mondo -> y schermo
+const sy = wy => STREET_Y - wy*KY; // altezza mondo -> y schermo
 
 function text(s, x, y, size=8, color='#f4f4f4', align='center', shadow=true){
   ctx.font = size + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'top';
@@ -558,34 +458,6 @@ function drawKid(x, kid, active, kicking, baseY){
   }
 }
 
-function drawStreet(){
-  const g = Math.round(sy(0));
-  if (g >= H) return;
-  ctx.fillStyle = '#8b9bb4'; ctx.fillRect(0, g, W, 6);           // marciapiede
-  ctx.fillStyle = '#c0cbdc'; for (let x=0;x<W;x+=16) ctx.fillRect(x, g, 1, 6);
-  ctx.fillStyle = '#5a6988'; ctx.fillRect(0, g+6, W, 2);
-  ctx.fillStyle = '#3a4466'; ctx.fillRect(0, g+8, W, H-g);         // strada
-  ctx.fillStyle = '#c0cbdc'; for (let x=4;x<W;x+=24) ctx.fillRect(x, g+22, 12, 2);
-}
-
-function drawMinimap(){
-  const mx = W - 14, mh = 120, my = 22;
-  ctx.fillStyle = 'rgba(26,28,44,0.7)'; ctx.fillRect(mx-2, my-2, 14, mh+4);
-  ctx.fillStyle = '#8c6d6a'; ctx.fillRect(mx, my, 10, mh);
-  const yy = wy => my + mh - wy/WALL_TOP*mh, xx = x => mx + x/W*10;
-  ctx.fillStyle = '#7fb2e0'; ctx.fillRect(mx+5, my, 5, Math.round(yy(RIGHT_TOP)) - my);
-  ctx.fillStyle = '#2a2130'; ctx.fillRect(Math.round(xx(W/2))-1, Math.round(yy(BRIDGE)), 2, Math.round(BRIDGE/WALL_TOP*mh));
-  ctx.fillStyle = '#b0908c'; ctx.fillRect(Math.round(xx(W/2))-1, Math.round(yy(BRIDGE))-1, 6, 1);
-  // l'incastro (lampeggia se è libero)
-  const nx = Math.round(xx(W/2)) - 2, ny = Math.round(yy(NICHE_Y));
-  if (game.niche.owner >= 0){ ctx.fillStyle = game.players[game.niche.owner].kid.shirt; ctx.fillRect(nx, ny, 3, 3); }
-  else if (Math.sin(performance.now()/200) > 0){ ctx.fillStyle = '#fee761'; ctx.fillRect(nx, ny, 2, 2); }
-  // giocatore e vista attuale
-  ctx.fillStyle = cur().kid.shirt; ctx.fillRect(Math.round(xx(cur().x))-1, my+mh-2, 3, 3);
-  ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 1;
-  ctx.strokeRect(mx-0.5, Math.round(yy(cam + H - GROUND))+0.5, 11, Math.max(2, (H-GROUND)/WALL_TOP*mh));
-}
-
 function drawHUD(){
   // punteggi in alto
   const n = game.players.length, bw = W / n;
@@ -613,18 +485,17 @@ function drawHUD(){
   ctx.fillStyle = wv > 30 ? '#e43b44' : wv > 15 ? '#feae34' : '#73eff7';
   if (dir > 0){ ctx.fillRect(ax, ay, len, 2); ctx.fillRect(ax+len, ay-1, 1, 4); ctx.fillRect(ax+len+1, ay, 1, 2); }
   else { ctx.fillRect(ax+36-len, ay, len, 2); ctx.fillRect(ax+35-len, ay-1, 1, 4); ctx.fillRect(ax+34-len, ay, 1, 2); }
-  drawMinimap();
 }
 
 function drawPowerBar(){
-  const bx = 8, by = 60, bh = H - GROUND - 70;
+  const bx = W - 12, by = 64, bh = 196;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(bx-2, by-2, 10, bh+4);
   ctx.fillStyle = '#333c57'; ctx.fillRect(bx, by, 6, bh);
   const fh = Math.round(power * bh);
   const c = power > 0.85 ? '#e43b44' : power > 0.55 ? '#feae34' : '#38b764';
   ctx.fillStyle = c; ctx.fillRect(bx, by + bh - fh, 6, fh);
-  for (let m=5; m<=20; m+=5){ const y = by + bh - (m*100/MAX_H)*bh; ctx.fillStyle='#f4f4f4'; ctx.fillRect(bx+6, Math.round(y), 2, 1); text(m+'', bx+10, Math.round(y)-3, 6, '#f4f4f4', 'left'); }
-  text(meters(power*MAX_H*strength()), bx-2, by-12, 6, c, 'left');
+  for (let m=5; m<=20; m+=5){ const y = by + bh - (m*100/MAX_H)*bh; ctx.fillStyle='#f4f4f4'; ctx.fillRect(bx-2, Math.round(y), 2, 1); text(m+'', bx-4, Math.round(y)-3, 6, '#f4f4f4', 'right'); }
+  text(meters(power*MAX_H*strength()), bx+7, by-12, 6, c, 'right');
 }
 
 let blurOn = false;
@@ -640,10 +511,9 @@ function draw(){
   if (shakeT > 0) ctx.translate(Math.round((Math.random()*2 - 1)*shakeA), Math.round((Math.random()*2 - 1)*shakeA));
 
   // muro
-  const topWy = cam + (H - GROUND);
-  const srcY = (WALL_TOP + 40) - topWy;
-  ctx.drawImage(wallCv, 0, Math.round(srcY), W, H, 0, 0, W, H);
-  drawStreet();
+  if (!sceneBg || sceneBg.width !== W) buildWall();
+  ctx.drawImage(sceneBg, 0, 0);
+  drawClouds();
 
   // palloni incastrati
   if (game.niche.owner >= 0) drawBall(nicheX(), sy(NICHE_Y), 0, game.niche.owner);
@@ -701,9 +571,8 @@ function draw(){
   if (state === 'aim') drawPowerBar();
   if (state === 'aim' && !charging && !banner){
     const b = Math.sin(performance.now()/250) > 0;
-    if (b) text('TIENI PREMUTO', W/2, H-GROUND+12, 6, '#fee761');
-    text('e trascina: angolo', W/2, H-GROUND+21, 6, '#c0cbdc', 'center');
-    text(game.lockX !== null ? 'posizione fissa!' : 'muovi u figghiuleddu', W/2, H-GROUND+30, 6, game.lockX !== null ? '#feae34' : '#c0cbdc', 'center');
+    text('tieni premuto+trascina', W/2, 304, 6, b ? '#fee761' : '#f4f4f4', 'center');
+    text(game.lockX !== null ? 'posizione fissa!' : 'muovi u figghiuleddu', W/2, 313, 6, game.lockX !== null ? '#feae34' : '#c0cbdc', 'center');
   }
   if (state === 'result'){
     const r = lastResult;
@@ -917,10 +786,10 @@ function updateDisturbs(dt){
       if (d.phase === 'idle' && d.t <= 0.8){ d.phase = 'growl'; beep(70, 0.8, 'sawtooth', 60, 0.06); }
       if (d.phase === 'growl' && d.t <= 0){
         d.phase = 'bark'; d.t = 0.6; sndBark();
-        popup('BAU! BAU!', d.x, 26, '#f4f4f4');
+        popup('BAU! BAU!', d.x, 26/KY, '#f4f4f4');
         if (charging){ // salto per lo spavento: parte il tiro!
           charging = false; ptr = null; kidJump = 0.35; shake(0.3, 2);
-          popup('AAAH!', cur().x, 34, cur().kid.shirt);
+          popup('AAAH!', cur().x, 34/KY, cur().kid.shirt);
           kick();
         } else startle(1);
       } else if (d.phase === 'bark' && d.t <= 0){ d.phase = 'idle'; d.t = 2.6 + Math.random()*2.4; }
@@ -930,7 +799,7 @@ function updateDisturbs(dt){
 function drawDisturbs(){
   const s = dist.signora;
   if (s){
-    const x = s.side < 0 ? 34 : W - 38, y = Math.round(sy(240));
+    const x = 8, y = 106;
     if (y > -30 && y < H){
       const yelling = s.yell > 0, bob = yelling ? Math.round(Math.sin(game.t*30)) : 0;
       ctx.fillStyle = '#5a3a30'; ctx.fillRect(x - 2, y - 2, 20, 22);
@@ -1148,14 +1017,21 @@ function button(label, x, y, w, h, onTap, color='#38b764'){
 let menuBg = null;
 const MS = { last: 0, t: 0, kicker: 0, phase: 'wait', pt: 1, kx: 0, ball: null, stuck: 3, falling: [], birds: [],
              clouds: [], signT: 5, signOn: 0, dogX: -30, dogT: 8, pops: [] };
-const MG = () => ({ gl: Math.round(W/2 - 9), gr: Math.round(W/2 + 9), slab: 96, slabT: 12, street: 300, lroof: 70, rroof: 88 });
+const MG = (hw = 16) => ({ gl: Math.round(W/2 - hw), gr: Math.round(W/2 + hw), slab: SLAB_Y, slabT: SLAB_T, street: STREET_Y, lroof: 70, rroof: 88 });
 function menuHome(i){ return [W*0.1, W*0.24, W*0.76, W*0.9, W*0.36][i]; }
 
 function buildMenuBg(){
+  menuBg = buildSceneBg(16);
+  const R = rnd(31);
+  MS.clouds = [0, 1, 2].map(i => ({ x: R()*W, y: 8 + i*16 + R()*6, w: 16 + (R()*14|0), v: 3 + R()*4 }));
+  MS.birds = [0, 1].map(i => ({ x: R()*W, y: 116 + i*14, v: (R() < 0.5 ? -1 : 1) * (14 + R()*10), ph: R()*6 }));
+}
+// la scena (palazzi, spacca, sbalzo, strada): uguale in homepage e in gioco
+function buildSceneBg(hw){
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'), R = rnd(77);
   const r = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(Math.round(x), Math.round(y), w, h); };
-  const { gl, gr, slab, slabT, street, lroof, rroof } = MG();
+  const { gl, gr, slab, slabT, street, lroof, rroof } = MG(hw);
   // cielo a bande
   [['#4f86c9', 0], ['#5f95d3', 22], ['#71a5dc', 42], ['#86b6e6', 62], ['#9cc6ea', 82]].forEach(([col, y]) => r(col, 0, y, W, H));
   // palazzi
@@ -1202,9 +1078,16 @@ function buildMenuBg(){
   for (let x = 0; x < W; x += 16) r('#c0cbdc', x, street, 1, 6);
   r('#3a4466', 0, street + 6, W, H);
   for (let x = 4; x < W; x += 24) r('#c0cbdc', x, street + 13, 12, 2);
-  menuBg = c;
-  MS.clouds = [0, 1, 2].map(i => ({ x: R()*W, y: 8 + i*16 + R()*6, w: 16 + (R()*14|0), v: 3 + R()*4 }));
-  MS.birds = [0, 1].map(i => ({ x: R()*W, y: 116 + i*14, v: (R() < 0.5 ? -1 : 1) * (14 + R()*10), ph: R()*6 }));
+  return c;
+}
+let cloudLast = 0;
+function drawClouds(){
+  const now = performance.now()/1000, dt = Math.min(0.05, cloudLast ? now - cloudLast : 0); cloudLast = now;
+  if (!MS.clouds.length) buildMenuBg();
+  for (const c of MS.clouds){
+    c.x += c.v*dt; if (c.x > W + 30) c.x = -c.w - 10;
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(Math.round(c.x), c.y, c.w, 4); ctx.fillRect(Math.round(c.x) + 4, c.y - 3, c.w - 8, 3);
+  }
 }
 
 function menuKick(){
