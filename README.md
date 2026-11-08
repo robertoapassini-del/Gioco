@@ -38,7 +38,7 @@ Ognuno ha le sue caratteristiche, sia in single player sia in multiplayer:
 | Giammy | il meno preciso: l'angolo del tiro gli sbanda |
 | Paso | non ci vede bene: durante il suo turno è tutto sfocato |
 | Lazzo | tira fortissimo, ma regolare la potenza è un dramma: la barra gli scappa e se tira troppo forte il pallone rimbalza via. Quando tira forte: *SBAUM!* Quando incastra si gira, si toglie gli occhiali e la telecamera stringe sui suoi occhi spalancati: *BELLINO!* |
-| Eddy | pelato, barba corta, canotta da basket: spesso arriva Giammy (*"Eddy, tocca a me!"*), Eddy sbotta (*"Gianmarco smettila!"*) e finiscono a spintoni e parolacce da fumetto; a ogni spinta Eddy si sposta e la mira gli balla |
+| Eddy | pelato, barba corta, maglietta bianca smanicata: spesso arriva Giammy (*"Eddy, tocca a me!"*), Eddy sbotta (*"Gianmarco smettila!"*) e finiscono a spintoni e parolacce da fumetto; a ogni spinta Eddy si sposta e la mira gli balla |
 | Saro | a torso nudo, tutto muscoli, col braccio destro tatuato in nero: lancia con le mani: tira più forte, dritto, e ha la freccia di mira più lunga |
 
 ## Avvio

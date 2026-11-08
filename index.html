@@ -82,7 +82,7 @@ const KIDS = [
     shorts:'#1a1c2c', hair:'#2a1a14', hairStyle:'short', beard:'#3a2a20', beardType:'stubble', skin:'#dba57c' },
   { name:'LAZZO',  shirt:'#73eff7', mark:'#73eff7', top:'#f4f4f4', top2:'#e43b44', kit:'logo',
     shorts:'#3b5dc9', pants:true, hair:'#2a1a14', hairStyle:'short', beard:'#2a1a14', beardType:'full', glasses:'#41a6f6', skin:'#e0ac85' },
-  { name:'EDDY',   shirt:'#a884f3', mark:'#a884f3', top:'#5d275d', top2:'#fee761', kit:'basket', sleeveless:true,
+  { name:'EDDY',   shirt:'#a884f3', mark:'#a884f3', top:'#f4f4f4', top2:'#c0cbdc', kit:'tank', sleeveless:true,
     shorts:'#5d275d', bald:true, beard:'#4a3426', beardType:'short', skin:'#e8b48e' },
   { name:'SARO',   shirt:'#38b764', mark:'#38b764', top:'#d9a07c', top2:'#1a1c2c', kit:'blackwork', sleeveless:true, muscle:true, hands:true,
     shorts:'#333c57', hair:'#8a6a48', hairStyle:'buzz', beard:'#4a3426', beardType:'thick', grey:'#a89888', sleeve:'#1a1c2c', skin:'#d9a07c' },
@@ -549,6 +549,8 @@ function drawKid(x, kid, active, kicking, baseY){
       px('#b8835f', X-4, base-12, 3, 1); px('#b8835f', X+1, base-12, 3, 1); px('#b8835f', X, base-11, 1, 2);
       px(kid.top2, X-5, base-15, 4, 2); px(kid.top2, X-5, base-13, 2, 1); px(kid.top2, X-2, base-13, 1, 3);
       px(kid.skin, X-4, base-14, 1, 1); px(kid.skin, X-3, base-15, 1, 1); break;
+    case 'tank':      // canottiera bianca smanicata
+      px(kid.top2, X-4, base-15, 1, 3); px(kid.top2, X+3, base-15, 1, 3); px(kid.top2, X-2, base-15, 4, 1); break;
     case 'basket':    // canotta da basket con il numero
       px(kid.top2, X-4, base-15, 1, 2); px(kid.top2, X+3, base-15, 1, 2); px(kid.top2, X-2, base-15, 4, 1);
       px(kid.top2, X-1, base-13, 1, 2); px(kid.top2, X+1, base-13, 1, 2); px(kid.top2, X, base-13, 1, 1); break;
