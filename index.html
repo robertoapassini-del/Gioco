@@ -137,7 +137,7 @@ function buildWall(){ game.solids = []; sceneBg = buildSceneBg(gapHW(0)); }
 
 // ================== TURNI ==================
 let ball = null, kidAnim = 0, wind = 0, power = 0, charging = false, chargeT = 0;
-let gustAmp = 0, gustF = 1, gustPh = 0, aimA = 0;
+let gustAmp = 0, gustF = 1, gustPh = 0, aimA = 0, sbaum = null;
 const MAX_ANGLE = 0.45; // ~26 gradi
 function sweepTime(){
   let sw = isClimb() ? Math.max(0.45, 1.15 - (game.level - 1)*0.05) : Math.max(0.5, 0.95 - (game.round - 1)*0.12);
@@ -186,6 +186,11 @@ function kick(){
   kidAnim = 0.3;
   state = 'flight';
   sfx.kick();
+  // Lazzo che tira forte: SBAUM!
+  if (perk('LAZZO') && power > 0.6){
+    sbaum = { t: 0.9, x: ball.x, y: sy(0) - 14 };
+    shake(0.35, 3); beep(70, 0.35, 'square', 35, 0.2); beep(1400, 0.15, 'sawtooth', 300, 0.05);
+  }
   for (let i=0;i<8;i++) game.particles.push({ x: ball.x, y: 2, vx:(Math.random()-0.5)*60, vy: Math.random()*60, t:0.4, c:'#8b9bb4' });
 }
 
@@ -220,6 +225,7 @@ function update(dt){
 
   if (shakeT > 0){ shakeT -= dt; if (shakeT <= 0) shakeA = 0; }
   if (kidJump > 0) kidJump -= dt;
+  if (sbaum){ sbaum.t -= dt; if (sbaum.t <= 0) sbaum = null; }
   if (game.chargeBoost > 0) game.chargeBoost -= dt;
   updateDisturbs(dt);
   updateUca(dt);
@@ -449,6 +455,20 @@ function drawBellino(){
     titleText('BELLINO!', 0, 0, fs, Math.floor(e*8) % 2 ? '#fee761' : '#feae34');
     ctx.restore();
   }
+}
+// scritta a fumetto per i tiri forti di Lazzo
+function drawSbaum(){
+  const age = 0.9 - sbaum.t, pop = Math.min(1, age / 0.08), out = Math.max(0, (age - 0.6) / 0.3);
+  const x = Math.round(Math.max(44, Math.min(W - 44, sbaum.x))), y = Math.round(sbaum.y - 22 - age*10);
+  // scoppio a raggi
+  ctx.fillStyle = 'rgba(254,231,97,' + (0.9*(1 - out)).toFixed(2) + ')';
+  for (let k = 0; k < 12; k++){
+    const a = k * Math.PI / 6 + 0.2, r1 = 10*pop, r2 = (24 + (k%2)*10) * pop;
+    for (let d = r1; d < r2; d += 2) ctx.fillRect(Math.round(x + Math.cos(a)*d), Math.round(y + 6 + Math.sin(a)*d*0.6), 2, 2);
+  }
+  ctx.save(); ctx.globalAlpha = 1 - out; ctx.translate(x, y); ctx.rotate(-0.12); ctx.scale(0.6 + 0.4*pop, (0.6 + 0.4*pop) * 1.4);
+  titleText('SBAUM!', 0, 0, 14, Math.floor(age*12) % 2 ? '#e43b44' : '#fee761');
+  ctx.restore();
 }
 function wedge(){
   const n = game.niche;
@@ -691,6 +711,7 @@ function draw(){
     text(banner.text, W/2 + 16, banner.sub ? 136 : 144, 8, banner.color);
     if (banner.sub) text(banner.sub, W/2 + 16, 152, 6, '#f4f4f4');
   }
+  if (sbaum) drawSbaum();
   if (state === 'result' && lastResult.ok && lastResult.bellino) drawBellino();
   if (state === 'over') drawOver();
 }

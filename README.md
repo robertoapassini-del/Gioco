@@ -37,7 +37,7 @@ Ognuno ha le sue caratteristiche, sia in single player sia in multiplayer:
 | Tano | il più forte, ma senza capelli non capisce il vento: la freccia del vento gli va a caso |
 | Giammy | il meno preciso: l'angolo del tiro gli sbanda |
 | Paso | non ci vede bene: durante il suo turno è tutto sfocato |
-| Lazzo | tira fortissimo, ma regolare la potenza è un dramma: la barra gli scappa e se tira troppo forte il pallone rimbalza via. Quando incastra si gira e si avvicina alla telecamera: *BELLINO!* |
+| Lazzo | tira fortissimo, ma regolare la potenza è un dramma: la barra gli scappa e se tira troppo forte il pallone rimbalza via. Quando tira forte: *SBAUM!* Quando incastra si gira, si toglie gli occhiali e la telecamera stringe sui suoi occhi spalancati: *BELLINO!* |
 
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages
