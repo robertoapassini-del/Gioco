@@ -87,34 +87,42 @@ const KIDS = [
 ];
 
 let game = null;     // stato della partita
-let state = 'menu';  // menu | aim | flight | result | over
+let state = 'menu';  // menu | select | aim | flight | result | over | board
 let menu = { players:5, rounds:3 };
 let best = 0;
 try { best = +localStorage.getItem('spacca_best') || 0; } catch(e){}
 
 // la spacca tra i due palazzi: centro e mezza larghezza in funzione dell'altezza
 function gapC(y){ return W/2 + 3*Math.sin(y*0.003 + game.s1) + 1.5*Math.sin(y*0.011 + game.s2); }
-function gapHW(y){ return 11 - 3.5*Math.min(1, y/BRIDGE); }
+function gapHW(y){ return (11 - 3.5*Math.min(1, y/BRIDGE)) * (game && game.gapScale || 1); }
 function inGap(x, y){ return y < BRIDGE && Math.abs(x - gapC(y)) < gapHW(y) - 1; }
 
-function newGame(){
+function makeGame(mode){
   online.saved = false; online.msg = null;
+  dist = {}; shakeT = 0; kidJump = 0;
   game = {
-    s1: Math.random()*6.28, s2: Math.random()*6.28,
-    players: [], round: 1, turn: 0,
+    mode, s1: Math.random()*6.28, s2: Math.random()*6.28,
+    players: [], round: 1, turn: 0, gapScale: 1, spacing: [85, 65], chargeBoost: 0,
     pockets: [], falling: [], particles: [], birds: [], popups: [], solids: [], t: 0,
   };
-  const spots = [W*0.18, W*0.82, W*0.32, W*0.68, W*0.5];
-  for (let i=0;i<menu.players;i++) game.players.push({ kid:KIDS[i], x: spots[i] });
-  // strozzature nella spacca (cornicioni/tubi) dove il pallone si incastra
+}
+// strozzature nella spacca (cornicioni/tubi) dove il pallone si incastra
+function genPockets(){
+  game.pockets = [];
   let y = 80;
   while (y < BRIDGE - 60){
     game.pockets.push({ x: 0, y, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: Math.random()<0.35 });
-    y += 85 + Math.random()*65;
+    y += game.spacing[0] + Math.random()*game.spacing[1];
   }
   // il posto d'oro: proprio sotto lo sbalzo
   game.pockets.push({ x: 0, y: BRIDGE - 6, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: false, top: true });
   buildWall();
+}
+function newGame(){
+  makeGame('party');
+  const spots = [W*0.18, W*0.82, W*0.32, W*0.68, W*0.5];
+  for (let i=0;i<menu.players;i++) game.players.push({ kid:KIDS[i], x: spots[i] });
+  genPockets();
   startTurn();
 }
 
@@ -249,6 +257,11 @@ function buildWall(){
 let ball = null, kidAnim = 0, wind = 0, power = 0, charging = false, chargeT = 0;
 let gustAmp = 0, gustF = 1, gustPh = 0, aimA = 0;
 const MAX_ANGLE = 0.45; // ~26 gradi
+function sweepTime(){
+  let sw = isClimb() ? Math.max(0.45, 1.15 - (game.level - 1)*0.05) : Math.max(0.5, 0.95 - (game.round - 1)*0.12);
+  if (perk('GIAMMY')) sw *= 1.35;
+  return sw;
+}
 const windNow = () => wind + gustAmp * Math.sin(game.t * gustF + gustPh);
 let cam = 0, camTarget = 0, banner = null, resultT = 0, lastResult = null, tickPh = 0;
 
@@ -261,16 +274,17 @@ function startTurn(){
   aimA = 0;
   wind = (Math.random()*2 - 1) * (10 + game.round*6);
   gustAmp = 6 + game.round*4; gustF = 1.2 + Math.random()*1.5; gustPh = Math.random()*6.28;
-  spawnBirds();
   power = 0; charging = false; camTarget = 0;
   const who = game.players.length > 1 ? 'TOCCA A ' + p.kid.name : 'TIRO ' + game.round + '/' + menu.rounds;
   banner = { text: who, t: 1.6, color: p.kid.shirt, kid: p.kid };
+  if (isClimb()) climbTurnSetup();
+  spawnBirds();
 }
 
 function kick(){
   const p = cur();
   const pw = Math.max(0.03, power);
-  const h = pw * MAX_H * (1 + (Math.random()-0.5)*0.03);
+  const h = pw * MAX_H * (1 + (Math.random()-0.5)*(perk('TANO') ? 0.1 : 0.03));
   ball.vy = Math.sqrt(2*G*h);
   ball.vx = ball.vy * Math.tan(aimA) + (Math.random()-0.5)*6;
   ball.x = p.x + 5; ball.y = BALL_R + 4;
@@ -285,6 +299,7 @@ function endTurn(res){
 }
 
 function nextTurn(){
+  if (isClimb()){ climbNext(); return; }
   game.turn++;
   if (game.turn >= game.players.length){ game.turn = 0; game.round++; }
   if (game.round > menu.rounds){ gameOver(); return; }
@@ -305,12 +320,17 @@ function update(dt){
   if (banner){ banner.t -= dt; if (banner.t <= 0) banner = null; }
   if (kidAnim > 0) kidAnim -= dt;
 
+  if (shakeT > 0){ shakeT -= dt; if (shakeT <= 0) shakeA = 0; }
+  if (kidJump > 0) kidJump -= dt;
+  if (game.chargeBoost > 0) game.chargeBoost -= dt;
+  updateDisturbs(dt);
   if (state === 'aim' && charging){
-    chargeT += dt;
-    const sweep = Math.max(0.5, 0.95 - (game.round - 1)*0.12);
-    const ph = (chargeT / sweep) % 2;
+    chargeT += dt * (game.chargeBoost > 0 ? 2.2 : 1);
+    const sweep = sweepTime();
+    const ph = (((chargeT / sweep) % 2) + 2) % 2;
     const tri = ph < 1 ? ph : 2 - ph;
-    power = Math.max(0, Math.min(1, Math.pow(tri, 1.6) + 0.012*Math.sin(chargeT*31)));
+    const jit = perk('TANO') ? 0.04 : 0.012;
+    power = Math.max(0, Math.min(1, Math.pow(tri, 1.6) + jit*Math.sin(chargeT*31)));
     tickPh += dt; if (tickPh > 0.12){ tickPh = 0; beep(200 + power*700, 0.02, 'square', null, 0.03); }
   }
 
@@ -364,7 +384,7 @@ function update(dt){
       if (dentro && Math.abs(ball.vy) < CATCH_VY){
         for (const p of game.pockets){
           if (Math.abs(ball.y - p.y) < CATCH_DY){
-            if (Math.abs(ball.x - p.x) < CATCH_DX && Math.abs(ball.vx) < CATCH_VX){ lodge(p); break; }
+            if (Math.abs(ball.x - p.x) < CATCH_DX && Math.abs(ball.vx) < (perk('FABIO') ? 85 : CATCH_VX)){ lodge(p); break; }
             // lato sbagliato: sbatte sul cornicione e ricade
             const c = gapC(p.y);
             if (Math.sign(ball.x - c) !== Math.sign(p.x - c) && ball.vy > 0 && !ball.hitLedge){
@@ -433,7 +453,7 @@ function collideRect(o){
   ball.x += nx*(BALL_R - d); ball.y += ny*(BALL_R - d);
   const vn = ball.vx*nx + ball.vy*ny;
   if (vn < 0){
-    const e = o.kind === 'clima' ? 0.75 : 0.5;
+    const e = (o.kind === 'clima' ? 0.75 : 0.5) + (perk('FABIO') ? 0.15 : 0);
     ball.vx -= (1+e)*vn*nx; ball.vy -= (1+e)*vn*ny;
     ball.vx *= 0.95;
     if (-vn > 70){
@@ -445,9 +465,11 @@ function collideRect(o){
 
 function spawnBirds(){
   game.birds = [];
-  const n = Math.min(5, game.round + 1);
+  const L = isClimb() ? game.level : 0;
+  const n = isClimb() ? (L >= 3 ? Math.min(5, Math.floor((L - 1)/2)) : 0) : Math.min(5, game.round + 1);
+  const lvl = isClimb() ? L/2 : game.round;
   for (let i=0;i<n;i++){
-    const sp = 22 + Math.random()*30 + game.round*6;
+    const sp = 22 + Math.random()*30 + lvl*6;
     game.birds.push({ x: Math.random()*W, y: 250 + Math.random()*(BRIDGE - 350), vx: Math.random()<0.5 ? sp : -sp, ph: Math.random()*6, scared: 0 });
   }
 }
@@ -457,8 +479,11 @@ function hitBirds(){
     const dx = ball.x - b.x, dy = ball.y - b.y;
     if (dx*dx + dy*dy < 36){
       b.scared = 3;
-      ball.vx += (dx >= 0 ? 1 : -1) * (50 + Math.random()*50);
-      ball.vy *= 0.55;
+      if (perk('TANO')){ popup('SBAM!', b.x, b.y + 8, '#e43b44'); }
+      else {
+        ball.vx += (dx >= 0 ? 1 : -1) * (50 + Math.random()*50);
+        ball.vy *= 0.55;
+      }
       beep(1200, 0.08, 'square', 600, 0.08); setTimeout(()=>beep(1400,0.06,'square',700,0.06), 70);
       for (let i=0;i<6;i++) game.particles.push({ x:b.x, y:b.y, vx:(Math.random()-0.5)*60, vy:Math.random()*40, t:0.8, c:'#c0cbdc' });
     }
@@ -592,6 +617,7 @@ function drawMinimap(){
 function drawHUD(){
   // punteggi in alto
   const n = game.players.length, bw = W / n;
+  if (isClimb()) drawClimbHUD(); else {
   ctx.fillStyle = 'rgba(26,28,44,0.85)'; ctx.fillRect(0, 0, W, 18);
   game.players.forEach((p, i) => {
     const x = i*bw;
@@ -601,6 +627,7 @@ function drawHUD(){
     text(meters(score(i)), x + bw/2, 10, 6, '#f4f4f4');
   });
   text('ROUND ' + Math.min(game.round, menu.rounds) + '/' + menu.rounds, 4, 22, 6, '#f4f4f4', 'left');
+  }
   // vento
   const wn = windNow(), wv = Math.abs(wn), dir = Math.sign(wn);
   text('VENTO', 4, 32, 6, '#c0cbdc', 'left');
@@ -627,6 +654,9 @@ function draw(){
   ctx.fillStyle = '#41a6f6'; ctx.fillRect(0,0,W,H);
   if (state === 'menu'){ drawMenu(); return; }
   if (state === 'board'){ drawBoard(); return; }
+  if (state === 'select'){ drawSelect(); return; }
+  ctx.save();
+  if (shakeT > 0) ctx.translate(Math.round((Math.random()*2 - 1)*shakeA), Math.round((Math.random()*2 - 1)*shakeA));
 
   // muro
   const topWy = cam + (H - GROUND);
@@ -634,6 +664,7 @@ function draw(){
   ctx.drawImage(wallCv, 0, Math.round(srcY), W, H, 0, 0, W, H);
   drawStreet();
 
+  if (isClimb()) drawTargetLine();
   // palloni incastrati
   for (const p of game.pockets) if (p.owner >= 0 && !(state==='result' && lastResult.ok && lastResult.h===p.y && resultT>1.5)){
     drawBall(p.x, sy(p.y), 0, p.owner);
@@ -650,7 +681,8 @@ function draw(){
   game.players.forEach((p, i) => {
     if (i !== game.turn) drawKid(p.x, p.kid, false, false);
   });
-  drawKid(cur().x, cur().kid, state==='aim', kidAnim > 0);
+  drawKid(cur().x, cur().kid, state==='aim', kidAnim > 0, kidJump > 0 ? sy(0) - 4 : undefined);
+  drawDisturbs();
   // pallone
   for (const f of game.falling) drawBall(f.x, sy(f.y), f.spin, f.owner);
   if (state === 'aim' || state === 'flight' || (state === 'result' && !lastResult.ok)) drawBall(ball.x, sy(ball.y), ball.spin);
@@ -673,6 +705,7 @@ function draw(){
   // altezza durante il volo
   if (state === 'flight') text(meters(Math.max(0, ball.y)), W/2, 44, 8, '#fee761');
 
+  ctx.restore();
   drawHUD();
   if (state === 'aim') drawPowerBar();
   if (state === 'aim' && !charging && !banner){
@@ -686,6 +719,11 @@ function draw(){
     if (r.ok){
       text('INCASTRATO!', W/2, 100, 10, '#fee761');
       text(meters(r.h), W/2, 116, 16, cur().kid.shirt);
+      if (isClimb()){
+        const cr = climbResult(r);
+        if (cr === 'goal') text('LIVELLO SUPERATO!', W/2, 176, 8, '#38b764');
+        else { text(cr === 'high' ? 'TROPPO ALTO!' : 'TROPPO BASSO!', W/2, 176, 8, '#e43b44'); text('-1 PALLONE', W/2, 188, 6, '#f4f4f4'); }
+      }
       if (r.bank > 0) text(r.bank > 2 ? 'SUPER SPONDA x' + r.bank + '!' : 'DI SPONDA!', W/2, 160, 8, '#73eff7');
       if (r.knocked !== null && r.knocked !== undefined){
         text(r.knocked === game.turn ? 'TI SEI BUTTATO GIU!' : 'HAI BUTTATO GIU', W/2, 140, 6, '#f4f4f4');
@@ -699,35 +737,354 @@ function draw(){
         text('NIENTE!', W/2, 110, 12, '#e43b44');
         text('ritenta', W/2, 128, 6, '#f4f4f4');
       }
+      if (isClimb()) text('-1 PALLONE', W/2, 142, 8, '#f4f4f4');
     }
   }
   if (banner){
     ctx.fillStyle = 'rgba(26,28,44,0.88)'; ctx.fillRect(0, 118, W, 60);
     ctx.fillStyle = banner.color; ctx.fillRect(0, 118, W, 2); ctx.fillRect(0, 176, W, 2);
     if (banner.kid){ ctx.save(); ctx.scale(2, 2); drawKid(11, banner.kid, false, false, 86); ctx.restore(); }
-    text(banner.text, W/2 + 16, 144, 8, banner.color);
+    text(banner.text, W/2 + 16, banner.sub ? 136 : 144, 8, banner.color);
+    if (banner.sub) text(banner.sub, W/2 + 16, 152, 6, '#f4f4f4');
   }
   if (state === 'over') drawOver();
+}
+
+// ================== SCALATA (giocatore singolo) ==================
+const PERKS = {
+  UCA:    ['UN PALLONE IN PIU', 'parte con 4 palloni'],
+  FABIO:  ['EFFETTO', 'tiri piu angolati e sponde migliori'],
+  TANO:   ['PALLA PESANTE', 'i piccioni non lo deviano, ma la barra trema'],
+  GIAMMY: ['PRECISIONE', 'la barra di potenza va piu lenta'],
+  PASO:   ['RESISTENTE', 'il vento lo sposta la meta'],
+};
+const INTRO = { signora: 4, car: 6, dog: 8 };
+let climbSel = 0;
+let climbBest = {};
+try { climbBest = JSON.parse(localStorage.getItem('spacca_scalata') || '{}') || {}; } catch(e){ climbBest = {}; }
+
+const isClimb = () => !!(game && game.mode === 'climb');
+function perk(name){ return isClimb() && game.players[0].kid.name === name; }
+function maxAngle(){ return perk('FABIO') ? 0.62 : MAX_ANGLE; }
+
+function newClimb(){
+  makeGame('climb');
+  game.players.push({ kid: KIDS[climbSel], x: W*0.3 });
+  game.level = 1;
+  game.lives = KIDS[climbSel].name === 'UCA' ? 4 : 3;
+  setupLevel();
+  startTurn();
+}
+function levelInfo(L){
+  const special = L % 5 === 0;
+  return { special, target: Math.min(1600, 250 + (L-1)*140), band: special ? 220 : 0 };
+}
+function setupLevel(){
+  const L = game.level, info = levelInfo(L);
+  game.target = info.target; game.special = info.special; game.band = info.band;
+  game.gapScale = Math.max(0.78, 1 - (L-1)*0.02);
+  game.spacing = [70 + Math.min(60, L*5), 50];
+  genPockets();
+  // nei livelli speciali deve esserci almeno una strozzatura nella fascia giusta
+  if (game.special && !game.pockets.some(p => p.y >= game.target && p.y <= game.target + game.band)){
+    game.pockets.push({ x: 0, y: game.target + game.band/2, owner: -1, side: Math.random()<0.5 ? -1 : 1, pipe: true });
+    buildWall();
+  }
+}
+function climbTurnSetup(){
+  const L = game.level;
+  wind = (Math.random()*2 - 1) * Math.min(50, (L-1)*5);
+  gustAmp = Math.max(0, Math.min(25, (L-3)*3));
+  if (perk('PASO')){ wind *= 0.5; gustAmp *= 0.5; }
+  game.pockets.forEach(p => p.owner = -1);
+  setupDisturbs(L);
+  let sub = game.special ? 'TRA ' + meters(game.target) + ' E ' + meters(game.target + game.band) : 'SOPRA ' + meters(game.target);
+  if (L === INTRO.signora) sub = 'OCCHIO ALLA SIGNORA!';
+  if (L === INTRO.car) sub = 'ARRIVA LA MACCHINA!';
+  if (L === INTRO.dog) sub = 'ATTENTI AL CANE!';
+  banner = { text: 'LIVELLO ' + L, sub, t: L === INTRO.signora || L === INTRO.car || L === INTRO.dog ? 2.4 : 1.8, color: game.players[0].kid.shirt, kid: game.players[0].kid };
+}
+function climbResult(r){
+  if (!r.ok) return 'miss';
+  if (r.h < game.target - 1) return 'low';
+  if (game.special && r.h > game.target + game.band) return 'high';
+  return 'goal';
+}
+function climbNext(){
+  const res = climbResult(lastResult);
+  if (res === 'goal'){
+    if (game.special) game.lives++;
+    game.level++;
+    setupLevel();
+  } else {
+    game.lives--;
+    if (game.lives <= 0){ climbOver(); return; }
+  }
+  startTurn();
+}
+function climbOver(){
+  state = 'over'; camTarget = 0; dist = {};
+  const k = game.players[0].kid.name;
+  game.newBest = game.level > (climbBest[k] || 0);
+  if (game.newBest){ climbBest[k] = game.level; try { localStorage.setItem('spacca_scalata', JSON.stringify(climbBest)); } catch(e){} }
+  sfx.win();
+}
+
+// ---------- disturbi: la signora, la macchina col basso, il cane ----------
+let dist = {};
+let shakeT = 0, shakeA = 0, kidJump = 0;
+function shake(t, a){ shakeT = Math.max(shakeT, t); shakeA = Math.max(shakeA, a); }
+function setupDisturbs(L){
+  dist = {};
+  const roll = k => L === INTRO[k] || (L > INTRO[k] && Math.random() < Math.min(0.85, 0.35 + (L - INTRO[k])*0.07));
+  if (roll('signora')) dist.signora = { side: Math.random() < 0.5 ? -1 : 1, t: 1.0 + Math.random()*1.8, yell: 0 };
+  if (roll('car')) dist.car = { t: 0, beat: 0, side: Math.random() < 0.5 ? -1 : 1 };
+  if (roll('dog')){
+    const side = Math.random() < 0.5 ? -1 : 1;
+    dist.dog = { side, x: side < 0 ? -14 : W + 14, tx: side < 0 ? 26 + Math.random()*30 : W - 26 - Math.random()*30, phase: 'walk', t: 1.2 + Math.random()*2, anim: 0 };
+  }
+}
+// spavento: il bambino sobbalza e il tiro si scombina
+function startle(strength){
+  kidJump = 0.35;
+  aimA = Math.max(-maxAngle(), Math.min(maxAngle(), aimA + (Math.random() - 0.5)*0.4*strength));
+  if (charging){
+    chargeT += sweepTime() * (0.3 + Math.random()*0.7) * strength;
+    game.chargeBoost = 1.2;
+  }
+  shake(0.3, 2);
+}
+function speak(txt, pitch, rate){
+  try {
+    if (!window.speechSynthesis) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = 'it-IT'; u.pitch = pitch; u.rate = rate; u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch(e){}
+}
+function sndBass(){
+  if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.2);
+  g.gain.setValueAtTime(0.45, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.3);
+  beep(55, 0.16, 'triangle', 52, 0.12);
+}
+function sndBark(){
+  if (!ac) return;
+  const one = (delay) => {
+    const t = ac.currentTime + delay, len = 0.12;
+    const buf = ac.createBuffer(1, Math.floor(ac.sampleRate*len), ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2 - 1) * (1 - i/d.length);
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 3;
+    g.gain.setValueAtTime(0.9, t);
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+    const o = ac.createOscillator(), g2 = ac.createGain();
+    o.type = 'square'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.1);
+    g2.gain.setValueAtTime(0.08, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g2); g2.connect(ac.destination); o.start(t); o.stop(t + 0.13);
+  };
+  one(0); one(0.22);
+}
+function sndOuu(){
+  beep(620, 0.9, 'sawtooth', 260, 0.05);
+  speak('Ouuuuuu! A finemu cu stu palluni?!', 1.5, 1.05);
+}
+function updateDisturbs(dt){
+  if (dist.signora && dist.signora.yell > 0) dist.signora.yell -= dt;
+  if (state !== 'aim' || banner) return;
+  const s = dist.signora;
+  if (s){
+    s.t -= dt;
+    if (s.t <= 0){ s.yell = 2.2; s.t = 3.2 + Math.random()*3; sndOuu(); startle(1); }
+  }
+  const c = dist.car;
+  if (c){
+    c.t += dt;
+    if (c.t >= 0.47){
+      c.t -= 0.47; c.beat++;
+      sndBass(); shake(0.12, 1.5);
+      aimA = Math.max(-maxAngle(), Math.min(maxAngle(), aimA + (Math.random() - 0.5)*0.12));
+      if (charging) chargeT += (Math.random() - 0.5) * 0.14 * sweepTime();
+    }
+  }
+  const d = dist.dog;
+  if (d){
+    d.anim += dt;
+    if (d.phase === 'walk'){
+      d.x += Math.sign(d.tx - d.x) * 40 * dt;
+      if (Math.abs(d.x - d.tx) < 1){ d.phase = 'idle'; }
+    } else {
+      d.t -= dt;
+      if (d.phase === 'idle' && d.t <= 0.8){ d.phase = 'growl'; beep(70, 0.8, 'sawtooth', 60, 0.06); }
+      if (d.phase === 'growl' && d.t <= 0){
+        d.phase = 'bark'; d.t = 0.6; sndBark();
+        popup('BAU! BAU!', d.x, 26, '#f4f4f4');
+        if (charging){ // salto per lo spavento: parte il tiro!
+          charging = false; ptr = null; kidJump = 0.35; shake(0.3, 2);
+          popup('AAAH!', cur().x, 34, cur().kid.shirt);
+          kick();
+        } else startle(1);
+      } else if (d.phase === 'bark' && d.t <= 0){ d.phase = 'idle'; d.t = 2.6 + Math.random()*2.4; }
+    }
+  }
+}
+function drawDisturbs(){
+  const s = dist.signora;
+  if (s){
+    const x = s.side < 0 ? 34 : W - 38, y = Math.round(sy(240));
+    if (y > -30 && y < H){
+      const yelling = s.yell > 0, bob = yelling ? Math.round(Math.sin(game.t*30)) : 0;
+      ctx.fillStyle = '#5a3a30'; ctx.fillRect(x - 2, y - 2, 20, 22);
+      ctx.fillStyle = '#3b3040'; ctx.fillRect(x, y, 16, 18);
+      // signora affacciata
+      ctx.fillStyle = '#c0cbdc'; ctx.fillRect(x + 5, y + 1 + bob, 6, 2); ctx.fillRect(x + 7, y - 1 + bob, 2, 2); // capelli col tuppo
+      ctx.fillStyle = '#f2c6a0'; ctx.fillRect(x + 5, y + 3 + bob, 6, 5);
+      ctx.fillStyle = '#1a1c2c'; ctx.fillRect(x + 6, y + 4 + bob, 1, 1); ctx.fillRect(x + 9, y + 4 + bob, 1, 1);
+      if (yelling){ ctx.fillStyle = '#5d275d'; ctx.fillRect(x + 7, y + 6 + bob, 2, 2); }
+      ctx.fillStyle = '#b55088'; ctx.fillRect(x + 3, y + 8, 10, 8);              // vestaglia a fiori
+      ctx.fillStyle = '#fee761'; ctx.fillRect(x + 5, y + 10, 1, 1); ctx.fillRect(x + 10, y + 12, 1, 1);
+      ctx.fillStyle = '#f2c6a0';
+      if (yelling){ ctx.fillRect(x + (s.side < 0 ? 14 : 0), y + 3 + bob*2, 2, 5); } // braccio che si agita
+      ctx.fillStyle = '#d8343f'; ctx.fillRect(x - 3, y + 16, 22, 1);
+      for (let k = 0; k <= 22; k += 3) ctx.fillRect(x - 3 + k, y + 16, 1, 6);
+      if (yelling){
+        const bw = 92, bx = Math.max(2, Math.min(W - bw - 2, W/2 - bw/2)), by = y + 26;
+        ctx.fillStyle = '#f4f4f4'; ctx.fillRect(bx, by, bw, 30);
+        ctx.fillStyle = '#1a1c2c'; ctx.fillRect(bx, by, bw, 1); ctx.fillRect(bx, by + 29, bw, 1); ctx.fillRect(bx, by, 1, 30); ctx.fillRect(bx + bw - 1, by, 1, 30);
+        ctx.fillStyle = '#f4f4f4'; ctx.fillRect(x + 7, by - 4, 3, 4);
+        text('OUUUUU!', bx + bw/2, by + 3, 6, '#e43b44', 'center', false);
+        text('A FINEMU CU', bx + bw/2, by + 12, 6, '#1a1c2c', 'center', false);
+        text('STU PALLUNI?!', bx + bw/2, by + 20, 6, '#1a1c2c', 'center', false);
+      }
+    }
+  }
+  const c = dist.car;
+  if (c && state === 'aim'){
+    const g = Math.round(sy(0)), pulse = c.t < 0.12, x = c.side < 0 ? -6 : W - 22;
+    if (g < H + 10){
+      ctx.fillStyle = '#5d275d'; ctx.fillRect(x, g + 10 - (pulse ? 1 : 0), 28, 10);
+      ctx.fillStyle = '#41a6f6'; ctx.fillRect(x + 6, g + 6 - (pulse ? 1 : 0), 14, 5);
+      ctx.fillStyle = '#1a1c2c'; ctx.fillRect(x + 3, g + 19, 6, 4); ctx.fillRect(x + 19, g + 19, 6, 4);
+      ctx.fillStyle = c.beat % 2 ? '#73eff7' : '#feae34'; ctx.fillRect(c.side < 0 ? x + 25 : x, g + 12, 3, 2);
+    }
+    if (pulse) text(c.beat % 2 ? 'BUM!' : 'TUNZ!', c.side < 0 ? 26 : W - 26, H - 30, 8, '#b55088');
+  }
+  const d = dist.dog;
+  if (d && sy(0) < H){
+    const X = Math.round(d.x), base = Math.round(sy(0)), f = d.side < 0 ? 1 : -1;
+    const sh = d.phase === 'growl' ? Math.round(Math.sin(game.t*60)) : 0;
+    const step = d.phase === 'walk' && Math.sin(d.anim*20) > 0 ? 1 : 0;
+    ctx.fillStyle = '#8a5a38';
+    ctx.fillRect(X - 5 + sh, base - 7, 10, 4);                       // corpo
+    ctx.fillRect(X + f*5 - (f < 0 ? 4 : 0) + sh, base - 10, 4, 4);   // testa
+    ctx.fillRect(X - 4 + sh, base - 3, 2, 3 - step); ctx.fillRect(X + 2 + sh, base - 3, 2, 2 + step); // zampe
+    ctx.fillStyle = '#5a3a2a'; ctx.fillRect(X + f*5 - (f < 0 ? 4 : 0) + (f > 0 ? 0 : 2) + sh, base - 11, 2, 2); // orecchio
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(X + f*8 - (f < 0 ? 1 : 0) + sh, base - 9, 1, 1);
+    const wag = Math.sin(game.t*20) > 0 ? -1 : 0;
+    ctx.fillStyle = '#8a5a38'; ctx.fillRect(X - f*6 - (f > 0 ? 1 : 0) + sh, base - 9 + wag, 1, 3); // coda
+    if (d.phase === 'growl') text('GRRR', X, base - 20, 6, '#e43b44');
+    if (d.phase === 'bark'){ ctx.fillStyle = '#f4f4f4'; ctx.fillRect(X + f*10, base - 12, 2, 1); ctx.fillRect(X + f*12, base - 14, 2, 1); ctx.fillRect(X + f*12, base - 10, 2, 1); }
+  }
+}
+
+// ---------- schermata di scelta del personaggio ----------
+function drawSelect(){
+  buttons = [];
+  const t = performance.now()/1000;
+  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
+  text('SCALATA', W/2, 10, 12, '#fee761');
+  text('SCEGLI IL TUO BIMBO', W/2, 28, 6, '#c0cbdc');
+  const slot = W / 5;
+  KIDS.forEach((k, i) => {
+    const cx = slot*i + slot/2, sel = i === climbSel;
+    if (sel){ ctx.fillStyle = k.shirt; ctx.fillRect(Math.round(cx - slot/2 + 1), 40, Math.round(slot - 2), 66); ctx.fillStyle = '#333c57'; ctx.fillRect(Math.round(cx - slot/2 + 2), 41, Math.round(slot - 4), 64); }
+    const jump = sel ? Math.abs(Math.sin(t*5))*3 : 0;
+    ctx.save(); ctx.scale(2, 2); drawKid(cx/2, k, false, false, 50 - jump); ctx.restore();
+    text(k.name, cx, 108, 6, sel ? k.shirt : '#8b9bb4', 'center', false);
+    buttons.push({ x: cx - slot/2, y: 38, w: slot, h: 78, onTap: () => { climbSel = i; sfx.tick(); } });
+  });
+  const k = KIDS[climbSel], pk = PERKS[k.name];
+  text(k.name, W/2, 122, 14, k.shirt);
+  text(pk[0], W/2, 144, 8, '#fee761');
+  // descrizione su più righe
+  const words = pk[1].toUpperCase().split(' '), lines = [];
+  let line = '';
+  for (const w of words){ if ((line + ' ' + w).trim().length > 24){ lines.push(line); line = w; } else line = (line + ' ' + w).trim(); }
+  if (line) lines.push(line);
+  lines.forEach((l, i) => text(l, W/2, 158 + i*10, 6, '#f4f4f4'));
+  text('RECORD: ' + (climbBest[k.name] ? 'LIVELLO ' + climbBest[k.name] : '-'), W/2, 188, 6, '#c0cbdc');
+  button('VIA!', W/2 - 50, 222, 100, 26, () => { audio(); sfx.kick(); newClimb(); }, '#e43b44');
+  button('INDIETRO', W/2 - 50, 258, 100, 18, () => { state = 'menu'; sfx.tick(); }, '#5a6988');
+}
+
+// ---------- HUD e schermata finale della scalata ----------
+function drawClimbHUD(){
+  ctx.fillStyle = 'rgba(26,28,44,0.85)'; ctx.fillRect(0, 0, W, 18);
+  const k = game.players[0].kid;
+  text('LIV ' + game.level, 4, 2, 8, '#fee761', 'left');
+  const goal = game.special ? meters(game.target) + '-' + meters(game.target + game.band) : '>' + meters(game.target);
+  text(goal, 4, 11, 6, k.shirt, 'left', false);
+  for (let i = 0; i < game.lives; i++) drawBall(W - 8 - i*10, 9, 0);
+  ctx.fillStyle = k.shirt; ctx.fillRect(0, 16, W, 2);
+}
+function drawTargetLine(){
+  const y = Math.round(sy(game.target));
+  if (game.special){
+    const y2 = Math.round(sy(game.target + game.band));
+    ctx.fillStyle = 'rgba(254,231,97,0.12)'; ctx.fillRect(0, y2, W, y - y2);
+    ctx.fillStyle = '#fee761'; for (let x = 0; x < W; x += 8) ctx.fillRect(x, y2, 4, 1);
+  }
+  if (y < 0 || y > H) return;
+  ctx.fillStyle = '#fee761'; for (let x = 0; x < W; x += 8) ctx.fillRect(x, y, 4, 1);
+  text('OBIETTIVO', W - 18, y - 8, 6, '#fee761', 'right');
+}
+function drawClimbOver(){
+  buttons = [];
+  ctx.fillStyle = 'rgba(26,28,44,0.92)'; ctx.fillRect(10, 50, W-20, 220);
+  const k = game.players[0].kid;
+  text('FINE SCALATA', W/2, 60, 8, '#e43b44');
+  ctx.save(); ctx.scale(2, 2); drawKid(W/4, k, false, false, 62); ctx.restore();
+  text('ARRIVATO AL', W/2, 132, 6, '#c0cbdc');
+  text('LIVELLO ' + game.level, W/2, 142, 14, k.shirt);
+  if (game.newBest) { if (Math.sin(performance.now()/150) > 0) text('NUOVO RECORD!', W/2, 162, 8, '#fee761'); }
+  else text('RECORD ' + k.name + ': LIV ' + (climbBest[k.name] || 0), W/2, 164, 6, '#f4f4f4');
+  if (ONLINE){
+    if (online.saved) button('CLASSIFICA', W/2 - 50, 182, 100, 16, () => openBoard('over'), '#3b5dc9');
+    else button(online.msg || 'SALVA RECORD', W/2 - 70, 182, 140, 16, () => { saveScores(); }, '#3b5dc9');
+  }
+  button('RIPROVA', W/2 - 50, 206, 100, 20, () => { newClimb(); });
+  button('CAMBIA BIMBO', W/2 - 60, 232, 120, 16, () => { state = 'select'; sfx.tick(); }, '#3b5dc9');
+  button('MENU', W/2 - 50, 252, 100, 14, () => { state = 'menu'; }, '#5a6988');
 }
 
 // ================== CLASSIFICA ONLINE (Supabase) ==================
 // Inserisci qui i dati del progetto Supabase (Project Settings -> API).
 // La chiave "anon public" è fatta apposta per stare nel codice del sito.
-const SUPABASE_URL = '';   // es. 'https://abcdefgh.supabase.co'
-const SUPABASE_KEY = '';   // chiave "anon public"
+const SUPABASE_URL = 'https://gtcntxprxphweshzndbp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_tTRzeBoWq3vTX2CEnxN8Pg_o_rhlKAF'; // chiave pubblica
 const ONLINE = !!(SUPABASE_URL && SUPABASE_KEY);
-const online = { list: null, loading: false, error: null, saving: false, saved: false, msg: null, from: 'menu' };
+const online = { list: null, listMode: null, mode: 'tiri', loading: false, error: null, saving: false, saved: false, msg: null, from: 'menu' };
 
 function sbHeaders(){
-  return { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+  const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
+  // le vecchie chiavi "anon" (JWT) vanno anche in Authorization; le nuove sb_publishable_ solo in apikey
+  if (!SUPABASE_KEY.startsWith('sb_')) h.Authorization = 'Bearer ' + SUPABASE_KEY;
+  return h;
 }
 async function loadBoard(){
   if (!ONLINE){ online.error = 'NON ATTIVA'; return; }
   online.loading = true; online.error = null;
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/records?select=name,score&order=score.desc,created_at.asc&limit=10', { headers: sbHeaders() });
+    const m = online.mode;
+    const r = await fetch(SUPABASE_URL + '/rest/v1/records?select=name,score&mode=eq.' + m + '&order=score.desc,created_at.asc&limit=10', { headers: sbHeaders() });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    online.list = await r.json();
+    const list = await r.json();
+    if (m === online.mode){ online.list = list; online.listMode = m; }
   } catch (e){ online.error = 'NIENTE CONNESSIONE'; }
   online.loading = false;
 }
@@ -739,12 +1096,16 @@ async function saveScores(){
   if (!ONLINE || online.saving || online.saved) return;
   // chiedo subito tutti i nomi (dentro il tocco), poi invio
   const entries = [];
-  game.players.forEach((p, i) => {
+  if (isClimb()){
+    const k = game.players[0].kid;
+    const n = cleanName(window.prompt('Nome per la classifica (' + k.name + ', livello ' + game.level + ')', lastName() || k.name));
+    if (n) entries.push({ name: n, score: game.level, mode: 'scalata' });
+  } else game.players.forEach((p, i) => {
     const sc = Math.round(score(i));
     if (sc <= 0) return;
     const def = game.players.length === 1 ? lastName() : '';
     const n = cleanName(window.prompt('Nome per la classifica (' + p.kid.name + ', ' + meters(sc) + ')', def));
-    if (n) entries.push({ name: n, score: sc });
+    if (n) entries.push({ name: n, score: sc, mode: 'tiri' });
   });
   if (!entries.length) return;
   if (game.players.length === 1){ try { localStorage.setItem('spacca_nome', entries[0].name); } catch(e){} }
@@ -761,6 +1122,8 @@ async function saveScores(){
 }
 function openBoard(from){
   online.from = from; state = 'board'; sfx.tick();
+  if (from === 'over' && game) online.mode = isClimb() ? 'scalata' : 'tiri';
+  if (online.listMode !== online.mode) online.list = null;
   loadBoard();
 }
 function drawBoard(){
@@ -768,7 +1131,8 @@ function drawBoard(){
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
   text('CLASSIFICA', W/2, 16, 10, '#fee761');
-  text('RECORD ONLINE', W/2, 32, 6, '#c0cbdc');
+  const tab = (label, m, x) => button(label, x, 30, 70, 14, () => { if (online.mode !== m){ online.mode = m; online.list = null; loadBoard(); sfx.tick(); } }, online.mode === m ? '#3b5dc9' : '#333c57');
+  tab('TIRI', 'tiri', W/2 - 74); tab('SCALATA', 'scalata', W/2 + 4);
   if (!ONLINE) text('NON ATTIVA', W/2, 120, 8, '#e43b44');
   else if (online.loading && !online.list) text('CARICO...', W/2, 120, 8, '#f4f4f4');
   else if (online.error) text(online.error, W/2, 120, 8, '#e43b44');
@@ -781,7 +1145,7 @@ function drawBoard(){
       const c = medal[k] || '#f4f4f4';
       text((k+1) + '.', 12, y, 6, c, 'left');
       text(String(r.name), 30, y, 6, c, 'left');
-      text(meters(r.score), W - 12, y, 8, c, 'right');
+      text(online.mode === 'scalata' ? 'LIV ' + r.score : meters(r.score), W - 12, y, 8, c, 'right');
     });
   }
   button('INDIETRO', W/2 - 50, H - 34, 100, 22, () => { state = online.from; sfx.tick(); }, '#5a6988');
@@ -821,14 +1185,16 @@ function drawMenu(){
   }
   text('TIRI', W/2, 202, 8, '#1a1c2c', 'center', false);
   [3,5].forEach((r, i) => button(''+r, W/2 - 40 + i*44, 214, 36, 20, () => { menu.rounds = r; sfx.tick(); }, menu.rounds===r ? '#feae34' : '#5a6988'));
-  button('GIOCA!', W/2 - 50, 242, 100, 24, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
+  button('GIOCA!', W/2 - 78, 242, 74, 24, () => { audio(); sfx.kick(); newGame(); }, '#e43b44');
+  button('SCALATA', W/2 + 4, 242, 74, 24, () => { audio(); state = 'select'; sfx.tick(); }, '#b55088');
   button('CLASSIFICA', W/2 - 50, 274, 100, 18, () => { audio(); openBoard('menu'); }, '#3b5dc9');
-  if (online.list && online.list.length) text('TOP: ' + online.list[0].name + ' ' + meters(online.list[0].score), W/2, 300, 6, '#fee761', 'center', true);
+  if (online.list && online.list.length && online.listMode === 'tiri') text('TOP: ' + online.list[0].name + ' ' + meters(online.list[0].score), W/2, 300, 6, '#fee761', 'center', true);
   else if (best > 0) text('RECORD SOLO ' + meters(best), W/2, 300, 6, '#fee761', 'center', true);
   text('Incastralo più in alto!', W/2, 140, 6, '#f4f4f4', 'center', true);
 }
 
 function drawOver(){
+  if (isClimb()){ drawClimbOver(); return; }
   buttons = [];
   ctx.fillStyle = 'rgba(26,28,44,0.9)'; ctx.fillRect(10, 60, W-20, 200);
   const ranking = game.players.map((p, i) => ({ p, i, s: score(i) })).sort((a,b) => b.s - a.s);
@@ -870,7 +1236,7 @@ function toGame(e){
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); audio();
   const p = toGame(e);
-  if (state === 'menu' || state === 'over' || state === 'board'){
+  if (state === 'menu' || state === 'over' || state === 'board' || state === 'select'){
     for (const b of buttons) if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h){ b.onTap(); return; }
     return;
   }
@@ -891,7 +1257,7 @@ cv.addEventListener('pointermove', e => {
     pl.x = Math.max(8, Math.min(W - 14, pl.x + (p.x - ptr.x)));
     ball.x = pl.x + 5;
   } else {
-    aimA = Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, aimA + (p.x - ptr.x)*0.012));
+    aimA = Math.max(-maxAngle(), Math.min(maxAngle(), aimA + (p.x - ptr.x)*0.012));
   }
   ptr.x = p.x;
 });
@@ -906,8 +1272,8 @@ window.addEventListener('keydown', e => { // tastiera per PC
   if (state !== 'aim') return;
   if (e.code === 'ArrowLeft'){ cur().x = Math.max(8, cur().x - 3); ball.x = cur().x + 5; }
   if (e.code === 'ArrowRight'){ cur().x = Math.min(W-14, cur().x + 3); ball.x = cur().x + 5; }
-  if (e.code === 'KeyA') aimA = Math.max(-MAX_ANGLE, aimA - 0.04);
-  if (e.code === 'KeyD') aimA = Math.min(MAX_ANGLE, aimA + 0.04);
+  if (e.code === 'KeyA') aimA = Math.max(-maxAngle(), aimA - 0.04);
+  if (e.code === 'KeyD') aimA = Math.min(maxAngle(), aimA + 0.04);
   if (e.code === 'Space' && !charging){ audio(); banner = null; charging = true; chargeT = 0; }
 });
 window.addEventListener('keyup', e => { if (e.code === 'Space' && state === 'aim' && charging){ charging = false; kick(); } });
@@ -916,7 +1282,7 @@ window.addEventListener('keyup', e => { if (e.code === 'Space' && state === 'aim
 let last = performance.now();
 function loop(now){
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (state !== 'menu' && state !== 'board') update(dt);
+  if (game && state !== 'menu' && state !== 'board' && state !== 'select') update(dt);
   draw();
   requestAnimationFrame(loop);
 }

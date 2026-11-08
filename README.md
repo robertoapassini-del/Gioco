@@ -22,15 +22,30 @@ dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il 
 - La minimappa a destra mostra i palloni incastrati.
 - Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
 
+## Scalata (giocatore singolo)
+Scegli il tuo bimbo e sali di livello. Ogni livello ha un obiettivo di altezza (la linea gialla), e ogni 5 livelli
+c'è un livello speciale: devi stare in una fascia precisa, e se ci riesci guadagni un pallone. Hai 3 palloni: ogni
+tiro che non raggiunge l'obiettivo te ne costa uno.
+
+Livello dopo livello aumentano il vento, la velocità della barra, i piccioni, e la spacca si stringe. Poi arrivano i disturbi:
+- **la signora** (dal livello 4) si affaccia e urla *"Ouuuu! A finemu cu stu palluni?!"*: il bimbo si spaventa, la barra impazzisce e la mira si sposta;
+- **la macchina col basso** (dal livello 6), fuori dallo schermo: a ogni colpo di basso il bimbo trema e la mira balla;
+- **il cane** (dal livello 8): prima ringhia, poi abbaia, e se in quel momento stai caricando ti spaventi e il tiro parte da solo!
+
+Ogni bimbo ha un punto forte:
+| Bimbo | Punto forte |
+|---|---|
+| Uca | parte con 4 palloni |
+| Fabio | tiri più angolati e sponde migliori |
+| Tano | i piccioni non lo deviano, ma la barra trema di più |
+| Giammy | barra di potenza più lenta |
+| Paso | il vento lo sposta la metà |
+
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages
 e aggiungerlo alla schermata Home. Su PC si gioca con le frecce e la barra spaziatrice.
 
 ## Classifica online
 I record vengono salvati su [Supabase](https://supabase.com), che offre un piano gratuito.
-1. Crea un progetto su Supabase.
-2. In **SQL Editor** incolla ed esegui il contenuto di `supabase.sql`.
-3. In **Project Settings → API** copia il *Project URL* e la chiave *anon public*.
-4. Inseriscili in `index.html`, nelle costanti `SUPABASE_URL` e `SUPABASE_KEY`.
-
-Finché le due costanti sono vuote, la classifica risulta "NON ATTIVA" e il gioco funziona normalmente.
+Il gioco è già collegato al progetto Supabase (costanti `SUPABASE_URL` e `SUPABASE_KEY` in `index.html`).
+La tabella si crea, o si aggiorna, eseguendo `supabase.sql` in **SQL Editor**. Le classifiche sono due: TIRI (altezza) e SCALATA (livello).
