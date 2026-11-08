@@ -28,14 +28,15 @@ Poi arrivano i disturbi:
 - **la macchina col basso** (dal livello 6), fuori dallo schermo: a ogni colpo di basso u figghiuleddu trema e la mira balla;
 - **il cane** (dal livello 8): prima ringhia, poi abbaia, e se in quel momento stai caricando ti spaventi e il tiro parte da solo!
 
-Ogni figghiuleddu ha un punto forte:
-| Figghiuleddu | Punto forte |
+## I figghiuleddi
+Ognuno ha le sue caratteristiche, sia in single player sia in multiplayer:
+| Figghiuleddu | Caratteristica |
 |---|---|
-| Uca | parte con 4 palloni |
-| Fabio | tiri più angolati e sponde migliori |
-| Tano | i piccioni non lo deviano, ma la barra trema di più |
-| Giammy | barra di potenza più lenta |
-| Paso | il vento lo sposta la metà |
+| Uca | normale, ma ogni tanto gira all'impazzata dicendo *"azzamittru, azzamittru, yeah yeah"*: mentre gira la mira va a caso |
+| Fabio | debole (tira meno forte), ma i piccioni non lo deviano |
+| Tano | il più forte, ma senza capelli non capisce il vento: la freccia del vento gli va a caso |
+| Giammy | il meno preciso: l'angolo del tiro gli sbanda |
+| Paso | non ci vede bene: durante il suo turno è tutto sfocato |
 
 ## Avvio
 È un solo file: apri `index.html` nel browser del telefono. Puoi anche pubblicarlo con GitHub Pages

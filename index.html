@@ -238,7 +238,6 @@ let gustAmp = 0, gustF = 1, gustPh = 0, aimA = 0;
 const MAX_ANGLE = 0.45; // ~26 gradi
 function sweepTime(){
   let sw = isClimb() ? Math.max(0.45, 1.15 - (game.level - 1)*0.05) : Math.max(0.5, 0.95 - (game.round - 1)*0.12);
-  if (perk('GIAMMY')) sw *= 1.35;
   return sw;
 }
 const windNow = () => wind + gustAmp * Math.sin(game.t * gustF + gustPh);
@@ -259,6 +258,7 @@ function startTurn(){
   banner = { text: who, t: 1.6, color: p.kid.shirt, kid: p.kid };
   if (isClimb()) climbTurnSetup();
   spawnBirds();
+  game.uca = perk('UCA') && Math.random() < 0.5 ? { t: 0.8 + Math.random()*2.5, spin: 0 } : null;
 }
 
 function ballStartX(){
@@ -269,9 +269,15 @@ function kick(){
   const p = cur();
   p.gx = p.x;
   const pw = Math.max(0.03, power);
-  const h = pw * MAX_H * (1 + (Math.random()-0.5)*(perk('TANO') ? 0.1 : 0.03));
+  const h = pw * MAX_H * strength() * (1 + (Math.random()-0.5)*0.03);
   ball.vy = Math.sqrt(2*G*h);
-  ball.vx = ball.vy * Math.tan(aimA) + (Math.random()-0.5)*6;
+  let a = aimA;
+  if (perk('GIAMMY')){
+    const dev = (Math.random() - 0.5) * 0.18;
+    a = Math.max(-0.6, Math.min(0.6, a + dev));
+    if (Math.abs(dev) > 0.05) popup('SBANDA!', p.x, 34, cur().kid.shirt);
+  }
+  ball.vx = ball.vy * Math.tan(a) + (Math.random()-0.5)*6;
   ball.x = ballStartX(); ball.y = BALL_R + 4;
   kidAnim = 0.3;
   state = 'flight';
@@ -312,12 +318,13 @@ function update(dt){
   if (kidJump > 0) kidJump -= dt;
   if (game.chargeBoost > 0) game.chargeBoost -= dt;
   updateDisturbs(dt);
+  updateUca(dt);
   if (state === 'aim' && charging){
     chargeT += dt * (game.chargeBoost > 0 ? 2.2 : 1);
     const sweep = sweepTime();
     const ph = (((chargeT / sweep) % 2) + 2) % 2;
     const tri = ph < 1 ? ph : 2 - ph;
-    const jit = perk('TANO') ? 0.04 : 0.012;
+    const jit = 0.012;
     power = Math.max(0, Math.min(1, Math.pow(tri, 1.6) + jit*Math.sin(chargeT*31)));
     tickPh += dt; if (tickPh > 0.12){ tickPh = 0; beep(200 + power*700, 0.02, 'square', null, 0.03); }
   }
@@ -406,7 +413,7 @@ function collideRect(o){
   ball.x += nx*(BALL_R - d); ball.y += ny*(BALL_R - d);
   const vn = ball.vx*nx + ball.vy*ny;
   if (vn < 0){
-    const e = (o.kind === 'clima' ? 0.75 : 0.5) + (perk('FABIO') ? 0.15 : 0);
+    const e = o.kind === 'clima' ? 0.75 : 0.5;
     ball.vx -= (1+e)*vn*nx; ball.vy -= (1+e)*vn*ny;
     ball.vx *= 0.95;
     if (-vn > 70){
@@ -432,7 +439,7 @@ function hitBirds(){
     const dx = ball.x - b.x, dy = ball.y - b.y;
     if (dx*dx + dy*dy < 36){
       b.scared = 3;
-      if (perk('TANO')){ popup('SBAM!', b.x, b.y + 8, '#e43b44'); }
+      if (perk('FABIO')){ popup('SBAM!', b.x, b.y + 8, '#e43b44'); }
       else {
         ball.vx += (dx >= 0 ? 1 : -1) * (50 + Math.random()*50);
         ball.vy *= 0.55;
@@ -445,7 +452,7 @@ function hitBirds(){
 
 function wallBounce(dir){
   const sp = Math.abs(ball.vx);
-  const ex = perk('FABIO') ? 0.62 : 0.5, ey = perk('FABIO') ? 0.985 : 0.97;
+  const ex = 0.5, ey = 0.97;
   ball.vx = dir * sp * ex;
   if (sp > 25){ ball.vy *= ey; bounceFx(); }
 }
@@ -594,10 +601,15 @@ function drawHUD(){
   text('ROUND ' + Math.min(game.round, menu.rounds) + '/' + menu.rounds, 4, 22, 6, '#f4f4f4', 'left');
   }
   // vento
-  const wn = windNow(), wv = Math.abs(wn), dir = Math.sign(wn);
-  text('VENTO', 4, 32, 6, '#c0cbdc', 'left');
+  let wn = windNow();
+  if (perk('TANO') && state !== 'over'){ // senza capelli non sente il vento: la freccia va a caso
+    const k = Math.floor(game.t * 3);
+    wn = Math.sin(k * 12.9898) * 43758.5453 % 1 * 50;
+  }
+  const wv = Math.abs(wn), dir = Math.sign(wn);
+  text(perk('TANO') && state !== 'over' ? 'VENTO ???' : 'VENTO', 4, 32, 6, '#c0cbdc', 'left');
   const len = Math.max(1, Math.min(34, Math.round(wv * 0.75)));
-  const ax = 36, ay = 34;
+  const ax = perk('TANO') && state !== 'over' ? 62 : 36, ay = 34;
   ctx.fillStyle = wv > 30 ? '#e43b44' : wv > 15 ? '#feae34' : '#73eff7';
   if (dir > 0){ ctx.fillRect(ax, ay, len, 2); ctx.fillRect(ax+len, ay-1, 1, 4); ctx.fillRect(ax+len+1, ay, 1, 2); }
   else { ctx.fillRect(ax+36-len, ay, len, 2); ctx.fillRect(ax+35-len, ay-1, 1, 4); ctx.fillRect(ax+34-len, ay, 1, 2); }
@@ -612,10 +624,13 @@ function drawPowerBar(){
   const c = power > 0.85 ? '#e43b44' : power > 0.55 ? '#feae34' : '#38b764';
   ctx.fillStyle = c; ctx.fillRect(bx, by + bh - fh, 6, fh);
   for (let m=5; m<=20; m+=5){ const y = by + bh - (m*100/MAX_H)*bh; ctx.fillStyle='#f4f4f4'; ctx.fillRect(bx+6, Math.round(y), 2, 1); text(m+'', bx+10, Math.round(y)-3, 6, '#f4f4f4', 'left'); }
-  text(meters(power*MAX_H), bx-2, by-12, 6, c, 'left');
+  text(meters(power*MAX_H*strength()), bx-2, by-12, 6, c, 'left');
 }
 
+let blurOn = false;
+function setBlur(on){ if (on !== blurOn){ blurOn = on; cv.style.filter = on ? 'blur(1.3px)' : 'none'; } }
 function draw(){
+  setBlur(!!(game && ['aim', 'flight', 'result'].includes(state) && perk('PASO')));
   ctx.fillStyle = '#41a6f6'; ctx.fillRect(0,0,W,H);
   if (state === 'menu'){ drawMenu(); return; }
   if (state === 'board'){ drawBoard(); return; }
@@ -644,7 +659,12 @@ function draw(){
   game.players.forEach((p, i) => {
     if (i !== game.turn) drawKid(p.x, p.kid, false, false);
   });
-  drawKid(cur().x, cur().kid, state==='aim', kidAnim > 0, kidJump > 0 ? sy(0) - 4 : undefined);
+  if (ucaSpinning()){ // gira su se stesso
+    const flip = Math.floor(game.t * 14) % 2 ? -1 : 1, X = Math.round(cur().x);
+    ctx.save(); ctx.translate(X, 0); ctx.scale(flip, 1); ctx.translate(-X, 0);
+    drawKid(X, cur().kid, false, false, sy(0) - Math.round(Math.abs(Math.sin(game.t*14))*3));
+    ctx.restore();
+  } else drawKid(cur().x, cur().kid, state==='aim', kidAnim > 0, kidJump > 0 ? sy(0) - 4 : undefined);
   drawDisturbs();
   // pallone
   for (const f of game.falling) drawBall(f.x, sy(f.y), f.spin, f.owner);
@@ -667,6 +687,15 @@ function draw(){
   // altezza durante il volo
   if (state === 'flight') text(meters(Math.max(0, ball.y)), W/2, 44, 8, '#fee761');
 
+  if (ucaSpinning()){
+    const bw = 84, bx = Math.max(2, Math.min(W - bw - 2, cur().x - bw/2)), by = Math.round(sy(0)) - 70;
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(bx, by, bw, 30);
+    ctx.fillStyle = '#1a1c2c'; ctx.fillRect(bx, by, bw, 1); ctx.fillRect(bx, by + 29, bw, 1); ctx.fillRect(bx, by, 1, 30); ctx.fillRect(bx + bw - 1, by, 1, 30);
+    ctx.fillStyle = '#f4f4f4'; ctx.fillRect(Math.round(cur().x), by + 30, 3, 6);
+    text('AZZAMITTRU,', bx + bw/2, by + 3, 6, '#1a1c2c', 'center', false);
+    text('AZZAMITTRU,', bx + bw/2, by + 12, 6, '#1a1c2c', 'center', false);
+    text('YEAH YEAH!', bx + bw/2, by + 21, 6, '#e43b44', 'center', false);
+  }
   ctx.restore();
   drawHUD();
   if (state === 'aim') drawPowerBar();
@@ -705,28 +734,31 @@ function draw(){
 }
 
 // ================== SCALATA (giocatore singolo) ==================
+// caratteristiche dei figghiuleddi (valgono in single player e in multiplayer)
 const PERKS = {
-  UCA:    ['UN PALLONE IN PIU', 'parte con 4 palloni'],
-  FABIO:  ['EFFETTO', 'tiri piu angolati e sponde migliori'],
-  TANO:   ['PALLA PESANTE', 'i piccioni non lo deviano, ma la barra trema'],
-  GIAMMY: ['PRECISIONE', 'la barra di potenza va piu lenta'],
-  PASO:   ['RESISTENTE', 'il vento lo sposta la meta'],
+  UCA:    ['NORMALE', 'ma ogni tanto gira all\'impazzata: azzamittru!'],
+  FABIO:  ['DEBOLE', 'tira piano, ma i piccioni non lo deviano'],
+  TANO:   ['IL PIÙ FORTE', 'ma senza capelli non capisce il vento'],
+  GIAMMY: ['POCO PRECISO', 'l\'angolo del tiro gli sbanda'],
+  PASO:   ['NON CI VEDE', 'vede tutto sfocato'],
 };
+const STRENGTH = { FABIO: 0.85, TANO: 1.15 };
 const INTRO = { signora: 4, car: 6, dog: 8 };
 let climbSel = 0;
 let climbBest = {};
 try { climbBest = JSON.parse(localStorage.getItem('spacca_scalata') || '{}') || {}; } catch(e){ climbBest = {}; }
 
 const isClimb = () => !!(game && game.mode === 'climb');
-function perk(name){ return isClimb() && game.players[0].kid.name === name; }
-function maxAngle(){ return perk('FABIO') ? 0.62 : MAX_ANGLE; }
+function perk(name){ return !!(game && game.players.length && cur().kid.name === name); }
+function maxAngle(){ return MAX_ANGLE; }
+function strength(){ return game && game.players.length ? (STRENGTH[cur().kid.name] || 1) : 1; }
 
 function newClimb(){
   makeGame('climb');
   game.players.push({ kid: KIDS[climbSel], home: gapC(0) + 4, x: gapC(0) + 4, gx: gapC(0) + 4 });
   game.points.push(0); game.closest.push(Infinity);
   game.level = 1;
-  game.lives = KIDS[climbSel].name === 'UCA' ? 4 : 3;
+  game.lives = 3;
   setupLevel();
   startTurn();
 }
@@ -747,7 +779,6 @@ function climbTurnSetup(){
   const L = game.level;
   wind = (Math.random()*2 - 1) * Math.min(50, (L-1)*5);
   gustAmp = Math.max(0, Math.min(25, (L-3)*3));
-  if (perk('PASO')){ wind *= 0.5; gustAmp *= 0.5; }
   setupDisturbs(L);
   let sub = game.lockX !== null ? 'TIRI DA QUI!' : 'INCASTRALO!';
   if (L === INTRO.signora) sub = 'OCCHIO ALLA SIGNORA!';
@@ -774,6 +805,26 @@ function climbOver(){
   if (game.newBest){ climbBest[k] = game.level; try { localStorage.setItem('spacca_scalata', JSON.stringify(climbBest)); } catch(e){} }
   sfx.win();
 }
+
+// ---------- Uca: ogni tanto gira all'impazzata ----------
+function updateUca(dt){
+  const u = game.uca;
+  if (!u) return;
+  if (u.spin > 0){
+    u.spin -= dt;
+    if (state === 'aim') aimA = Math.sin(game.t * 14) * maxAngle();
+    else u.spin = 0;
+    return;
+  }
+  if (state !== 'aim' || banner) return;
+  u.t -= dt;
+  if (u.t <= 0){
+    u.spin = 1.8; u.t = 4 + Math.random()*4; kidJump = 0.3;
+    speak('Azzamittru, azzamittru, yeah yeah!', 1.2, 1.2);
+    beep(330, 0.1, 'square', 660, 0.05); setTimeout(() => beep(440, 0.1, 'square', 880, 0.05), 150);
+  }
+}
+function ucaSpinning(){ return !!(game && game.uca && game.uca.spin > 0); }
 
 // ---------- disturbi: la signora, la macchina col basso, il cane ----------
 let dist = {};
