@@ -1,10 +1,10 @@
 # Pallone nella Spacca
 
-Gioco arcade in pixel art per cellulare. Ogni giocatore ha il suo bambino e tira il pallone in alto
+Gioco arcade in pixel art per cellulare. Ogni giocatore ha il suo figghiuleddu e tira il pallone in alto
 dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il pallone più in alto.
 
 ## Come si gioca
-- **Trascina il bambino** per spostarlo lungo il marciapiede.
+- **Trascina u figghiuleddu** per spostarlo lungo il marciapiede.
 - **Tieni premuto** in un altro punto dello schermo per caricare il tiro: la barra a sinistra indica l'altezza.
 - Mentre tieni premuto, **trascina a destra o a sinistra** per inclinare il tiro (la freccia gialla mostra la direzione).
 - **Lascia** per calciare.
@@ -23,17 +23,17 @@ dentro la **spacca**, la fessura stretta tra due palazzi. Vince chi incastra il 
 - Da 1 a 5 giocatori sullo stesso telefono (Uca, Fabio, Tano, Giammy e Paso), con 3 o 5 tiri a testa. In modalità solo viene salvato il record.
 
 ## Scalata (giocatore singolo)
-Scegli il tuo bimbo e sali di livello. Ogni livello ha un obiettivo di altezza (la linea gialla), e ogni 5 livelli
+Scegli il tuo figghiuleddu e sali di livello. Ogni livello ha un obiettivo di altezza (la linea gialla), e ogni 5 livelli
 c'è un livello speciale: devi stare in una fascia precisa, e se ci riesci guadagni un pallone. Hai 3 palloni: ogni
 tiro che non raggiunge l'obiettivo te ne costa uno.
 
 Livello dopo livello aumentano il vento, la velocità della barra, i piccioni, e la spacca si stringe. Poi arrivano i disturbi:
-- **la signora** (dal livello 4) si affaccia e urla *"Ouuuu! A finemu cu stu palluni?!"*: il bimbo si spaventa, la barra impazzisce e la mira si sposta;
-- **la macchina col basso** (dal livello 6), fuori dallo schermo: a ogni colpo di basso il bimbo trema e la mira balla;
+- **la signora** (dal livello 4) si affaccia e urla *"Ouuuu! A finemu cu stu palluni?!"*: u figghiuleddu si spaventa, la barra impazzisce e la mira si sposta;
+- **la macchina col basso** (dal livello 6), fuori dallo schermo: a ogni colpo di basso u figghiuleddu trema e la mira balla;
 - **il cane** (dal livello 8): prima ringhia, poi abbaia, e se in quel momento stai caricando ti spaventi e il tiro parte da solo!
 
-Ogni bimbo ha un punto forte:
-| Bimbo | Punto forte |
+Ogni figghiuleddu ha un punto forte:
+| Figghiuleddu | Punto forte |
 |---|---|
 | Uca | parte con 4 palloni |
 | Fabio | tiri più angolati e sponde migliori |

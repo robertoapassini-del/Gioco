@@ -712,7 +712,7 @@ function draw(){
     const b = Math.sin(performance.now()/250) > 0;
     if (b) text('TIENI PREMUTO', W/2, H-GROUND+12, 6, '#fee761');
     text('e trascina: angolo', W/2, H-GROUND+21, 6, '#c0cbdc', 'center');
-    text('trascina il bimbo: sposta', W/2, H-GROUND+30, 6, '#c0cbdc', 'center');
+    text('muovi u figghiuleddu', W/2, H-GROUND+30, 6, '#c0cbdc', 'center');
   }
   if (state === 'result'){
     const r = lastResult;
@@ -998,7 +998,7 @@ function drawSelect(){
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#2a2130'; ctx.fillRect(W/2 - 9, 0, 18, H);
   text('SCALATA', W/2, 10, 12, '#fee761');
-  text('SCEGLI IL TUO BIMBO', W/2, 28, 6, '#c0cbdc');
+  text('SCEGLI U FIGGHIULEDDU', W/2, 28, 6, '#c0cbdc');
   const slot = W / 5;
   KIDS.forEach((k, i) => {
     const cx = slot*i + slot/2, sel = i === climbSel;
@@ -1058,7 +1058,7 @@ function drawClimbOver(){
     else button(online.msg || 'SALVA RECORD', W/2 - 70, 182, 140, 16, () => { saveScores(); }, '#3b5dc9');
   }
   button('RIPROVA', W/2 - 50, 206, 100, 20, () => { newClimb(); });
-  button('CAMBIA BIMBO', W/2 - 60, 232, 120, 16, () => { state = 'select'; sfx.tick(); }, '#3b5dc9');
+  button('CAMBIA FIGGHIULEDDU', W/2 - 79, 232, 158, 16, () => { state = 'select'; sfx.tick(); }, '#3b5dc9');
   button('MENU', W/2 - 50, 252, 100, 14, () => { state = 'menu'; }, '#5a6988');
 }
 
